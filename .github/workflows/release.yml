@@ -130,14 +130,20 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
       - run: flutter pub get
-      - name: Build and sign Windows
+      - name: Compile Windows app
+        if: runner.os == 'Windows'
+        run: flutter build windows --release
+      - name: Sign and package Windows
         if: runner.os == 'Windows'
         shell: pwsh
         env:
           WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
           WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
         run: ./scripts/package-windows.ps1
-      - name: Build and sign macOS
+      - name: Compile macOS app
+        if: runner.os == 'macOS'
+        run: flutter build macos --release
+      - name: Sign, package and notarize macOS
         if: runner.os == 'macOS'
         env:
           MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}

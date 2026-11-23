@@ -6,6 +6,8 @@ set -euo pipefail
 : "${APPLE_ID:?Missing Apple ID}"
 : "${APPLE_APP_PASSWORD:?Missing notarization password}"
 : "${APPLE_TEAM_ID:?Missing Apple team ID}"
+APP=build/macos/Build/Products/Release/periodify.app
+test -d "$APP" || { echo 'Run flutter build macos --release before packaging.' >&2; exit 1; }
 KEYCHAIN="$RUNNER_TEMP/periodify.keychain-db"
 KEYCHAIN_PASSWORD=$(openssl rand -hex 24)
 trap 'security delete-keychain "$KEYCHAIN" || true; rm -f "$RUNNER_TEMP/apple.p12"' EXIT
@@ -16,8 +18,6 @@ security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
 security import "$RUNNER_TEMP/apple.p12" -k "$KEYCHAIN" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
 security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
 security list-keychains -d user -s "$KEYCHAIN" "$HOME/Library/Keychains/login.keychain-db"
-flutter build macos --release
-APP=build/macos/Build/Products/Release/periodify.app
 find "$APP/Contents/Frameworks" -depth \( -name '*.framework' -o -name '*.dylib' \) -exec codesign --force --options runtime --timestamp --sign "$MACOS_SIGNING_IDENTITY" {} \;
 codesign --force --options runtime --timestamp --entitlements macos/Runner/Release.entitlements --sign "$MACOS_SIGNING_IDENTITY" "$APP"
 codesign --verify --deep --strict "$APP"

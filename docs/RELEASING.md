@@ -18,6 +18,8 @@ The original Linux key was generated on Windows with a trailing carriage return 
 
 The same Android key signs phone and watch APKs. Debug keys are for local testing only. Missing production credentials fail the applicable job; there is no unsigned fallback. A Windows/Apple trusted certificate must be obtained from its provider. The Linux `.deb` has a detached `.asc` signature and the public signing key is attached to the release.
 
+Windows and macOS compilation is checked separately from signing. A successful compilation is visible in Actions even if credentials are missing. For Windows, the current workflow accepts a PFX with the private key for a trusted Authenticode certificate. A hardware-backed certificate or managed signing service needs its provider's signing integration instead. For macOS, export a **Developer ID Application** certificate and private key to a password-protected `.p12` and configure the Apple notarization credentials above. Add credentials through the repository's Actions secret settings.
+
 ## Workflow
 
 1. Increment `version: x.y.z+N`; `N` must monotonically increase for Android updates. Update the changelog.

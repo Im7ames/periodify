@@ -1,3 +1,7 @@
+# Periodify 0.1.3
+
+- Check Windows and macOS compilation before package signing. Unavailable downloads link to their build status.
+
 # Periodify 0.1.2
 
 - Make Cloudflare deployment opt-in. GitHub Actions still builds the web ZIP and release packages.
