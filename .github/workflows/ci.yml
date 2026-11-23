@@ -1,0 +1,46 @@
+name: Validate and version
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build web --release
+  version:
+    needs: validate
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish version and dispatch packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(sed -n 's/^version: \([^+]*\).*/\1/p' pubspec.yaml)
+          TAG="v$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            RELEASE_SHA=$(git ls-remote origin "refs/tags/$TAG" | cut -f1)
+            if [[ "$RELEASE_SHA" != "$GITHUB_SHA" ]]; then
+              echo "Version already released; bump pubspec.yaml for the next feature or fix."
+              exit 1
+            fi
+          else
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "Periodify $TAG" --notes-file CHANGELOG.md --prerelease
+          fi
+          # GITHUB_TOKEN-created releases do not trigger release events. Explicit dispatch is required.
+          gh workflow run release.yml --ref main -f tag="$TAG"
