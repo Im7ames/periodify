@@ -39,6 +39,7 @@ jobs:
           path: periodify-web.zip
   deploy:
     needs: web
+    if: ${{ vars.PERIODIFY_DEPLOY_WEB == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

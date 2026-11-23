@@ -12,7 +12,7 @@ Configure these repository **Actions secrets**:
 | Linux detached OpenPGP signature | `LINUX_GPG_PRIVATE_KEY` (armored private key), `LINUX_GPG_PASSPHRASE` |
 | Cloudflare | `CLOUDFLARE_API_TOKEN` with Workers Scripts edit permissions for the selected account |
 
-Configure **Actions variables** `CLOUDFLARE_ACCOUNT_ID` and `PERIODIFY_WEB_URL` (the deployed HTTPS origin).
+Cloudflare deployment is opt-in. Set the `CLOUDFLARE_API_TOKEN` secret and `CLOUDFLARE_ACCOUNT_ID` and `PERIODIFY_WEB_URL` variables first. Then set the `PERIODIFY_DEPLOY_WEB` Actions variable to `true`. Leave it blank to skip Cloudflare while still building and publishing the web ZIP.
 
 The original Linux key was generated on Windows with a trailing carriage return in its passphrase. Set the `LINUX_GPG_PASSPHRASE_SUFFIX_CR` Actions variable to `true` for that key. Keep the stored passphrase itself as the printable text.
 
@@ -23,7 +23,7 @@ The same Android key signs phone and watch APKs. Debug keys are for local testin
 1. Increment `version: x.y.z+N`; `N` must monotonically increase for Android updates. Update the changelog.
 2. Run `flutter analyze`, `flutter test`, and builds affected by the change.
 3. Commit and push to `main`. Validation creates `vX.Y.Z` as a preview release, then explicitly dispatches `release.yml` for that tag. Existing tags are never moved.
-4. Packaging checks out the immutable tag. Web deployment uses the official `cf` CLI and verifies the deployed page. All native jobs require production keys, and phone/watch certificate hashes must match.
+4. Packaging checks out the immutable tag. When enabled, web deployment uses the official `cf` CLI and verifies the deployed build. All native jobs require production keys, and phone/watch certificate hashes must match.
 5. The final job uploads verified installers as they become available, the web ZIP, Linux detached signature/public key, `SHA256SUMS.txt` and `updates.json`; writes a platform download table; then downloads each package again to verify its checksum.
 6. Monitor Actions to terminal state. Retry only transient failures. Fix source problems in a new patch release; configure missing secrets and rerun failed jobs for setup failures.
 
