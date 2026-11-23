@@ -16,7 +16,7 @@ Cloudflare deployment is opt-in. Set the `CLOUDFLARE_API_TOKEN` secret and `CLOU
 
 The original Linux key was generated on Windows with a trailing carriage return in its passphrase. Set the `LINUX_GPG_PASSPHRASE_SUFFIX_CR` Actions variable to `true` for that key. Keep the stored passphrase itself as the printable text.
 
-The same Android key signs phone and watch APKs. Debug keys are for local testing only. Missing production credentials fail the applicable job; there is no unsigned fallback. A Windows/Apple trusted certificate must be obtained from its provider. The Linux `.deb` has a detached `.asc` signature and the public signing key is attached to the release.
+The same Android key signs the phone APK, Wear OS APK and Android App Bundle. Debug builds are for testing. Missing Android or Linux credentials fail the release build. Windows and macOS compilation runs independently, and downloads require their trusted signing credentials. The Linux `.deb` has a detached `.asc` signature and the public signing key is attached to the release.
 
 Windows and macOS compilation is checked separately from signing. A successful compilation is visible in Actions even if credentials are missing. For Windows, the current workflow accepts a PFX with the private key for a trusted Authenticode certificate. A hardware-backed certificate or managed signing service needs its provider's signing integration instead. For macOS, export a **Developer ID Application** certificate and private key to a password-protected `.p12` and configure the Apple notarization credentials above. Add credentials through the repository's Actions secret settings.
 
@@ -24,10 +24,10 @@ Windows and macOS compilation is checked separately from signing. A successful c
 
 1. Increment `version: x.y.z+N`; `N` must monotonically increase for Android updates. Update the changelog.
 2. Run `flutter analyze`, `flutter test`, and builds affected by the change.
-3. Commit and push to `main`. Validation creates `vX.Y.Z` as a preview release, then explicitly dispatches `release.yml` for that tag. Existing tags are never moved.
-4. Packaging checks out the immutable tag. When enabled, web deployment uses the official `cf` CLI and verifies the deployed build. All native jobs require production keys, and phone/watch certificate hashes must match.
-5. The final job uploads verified installers as they become available, the web ZIP, Linux detached signature/public key, `SHA256SUMS.txt` and `updates.json`; writes a platform download table; then downloads each package again to verify its checksum.
-6. Monitor Actions to terminal state. Retry only transient failures. Fix source problems in a new patch release; configure missing secrets and rerun failed jobs for setup failures.
+3. Commit and push. **Build Periodify** runs on pushes and pull requests. It builds and tests the web app, builds debug Android and Wear OS APKs, and compiles on Windows, macOS and Linux.
+4. Publish a GitHub release for the checked commit with tag `vX.Y.Z`. **Publish Periodify release** verifies the tag and version and calls the same build workflow with the signing credentials. Keep existing tags on their original commits.
+5. The publish job attaches available installers, the web ZIP, the Linux detached signature and public key, and `SHA256SUMS.txt`. It verifies the uploaded bytes, attaches `updates.json`, and updates the download table. When enabled, Cloudflare deploys the verified web ZIP.
+6. Use **Run workflow** on the release workflow with **dry_run** checked to save a `release-preview` artifact without editing a release. To attach packages after adding credentials, select the existing release tag as the ref, enter that same tag as `release_tag`, and turn off **dry_run**. Retry transient failures and use a new patch version for source fixes.
 
 `updates.json` is a versioned update discovery manifest, not an automatic installer. It provides asset URLs, sizes and SHA-256 hashes. Updates remain user-installed. Android accepts replacements only with the same signing key; Windows uses the stable installer AppId; macOS uses the existing Developer ID.
 

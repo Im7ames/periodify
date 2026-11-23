@@ -36,7 +36,7 @@ For native desktop builds, install Flutter's platform-specific prerequisites. Wi
 
 ## Release
 
-See [docs/RELEASING.md](docs/RELEASING.md). Bump both the semantic version and build number in `pubspec.yaml` for every completed feature/fix. Run relevant tests/builds, update `CHANGELOG.md`, and commit/push. CI validates the change, creates a versioned preview release, then explicitly dispatches the packaging workflow (GitHub prevents a release created with GITHUB_TOKEN from recursively triggering another workflow). Manually published releases also trigger packaging.
+See [docs/RELEASING.md](docs/RELEASING.md). Bump the version and build number in `pubspec.yaml`, update `CHANGELOG.md`, and push. The Build workflow verifies the source. Publishing a GitHub release for the checked commit calls the same workflow in signed release mode. The release workflow also supports a manual dry run.
 
 ## Verification limits
 

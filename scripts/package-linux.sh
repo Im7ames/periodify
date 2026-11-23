@@ -2,7 +2,7 @@
 set -euo pipefail
 : "${LINUX_GPG_PRIVATE_KEY:?Missing existing Linux signing key}"
 : "${LINUX_GPG_PASSPHRASE:?Missing Linux signing passphrase}"
-flutter build linux --release
+test -d build/linux/x64/release/bundle || { echo 'Run flutter build linux --release before packaging.' >&2; exit 1; }
 mkdir -p artifacts build/deb/DEBIAN build/deb/opt/periodify build/deb/usr/share/applications
 cp -a build/linux/x64/release/bundle/. build/deb/opt/periodify/
 cat > build/deb/DEBIAN/control <<EOF

@@ -1,3 +1,10 @@
+# Periodify 0.1.4
+
+- Use a shared build workflow for CI and tagged releases, with a manual dry run.
+- Publish signed Android APKs and an Android App Bundle. Verify installer downloads before attaching the update manifest.
+- Keep the Windows WebView build compatible with Visual Studio 2026.
+- Keep unsigned Windows and macOS builds out of releases while the runners verify compilation.
+
 # Periodify 0.1.3
 
 - Check Windows and macOS compilation before package signing. Unavailable downloads link to their build status.

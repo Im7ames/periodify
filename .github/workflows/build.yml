@@ -1,0 +1,202 @@
+name: Build Periodify
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      release_version:
+        type: string
+        default: ''
+      android_version_code:
+        type: string
+        default: ''
+permissions:
+  contents: read
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  web:
+    name: Web and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build web --release
+      - name: Record build provenance
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          release=""
+          if [[ -n "$RELEASE_VERSION" ]]; then release="v$RELEASE_VERSION"; fi
+          jq -n --arg commit "$(git rev-parse HEAD)" --arg release "$release" \
+            '{commit: $commit, release: $release}' > build/web/build-info.json
+      - run: cd build/web && zip -qr ../../periodify-web.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: periodify-web
+          path: periodify-web.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  android:
+    name: Android and Wear OS
+    needs: web
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          cache: true
+      - run: flutter pub get
+      - name: Build Android and Wear OS debug APKs
+        if: inputs.release_version == ''
+        run: |
+          flutter build apk --debug
+          cd android
+          ./gradlew :wear:assembleDebug
+      - uses: actions/upload-artifact@v4
+        if: inputs.release_version == ''
+        with:
+          name: periodify-android-debug
+          path: |
+            build/app/outputs/flutter-apk/app-debug.apk
+            build/wear/outputs/apk/debug/wear-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+      - name: Restore existing signing key
+        if: inputs.release_version != ''
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          test -n "$KEYSTORE" && test -n "$STORE_PASSWORD" && test -n "$KEY_PASSWORD" && test -n "$KEY_ALIAS" || { echo 'Configure Android signing secrets before publishing.'; exit 1; }
+          umask 077
+          printf '%s' "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/release.jks"
+      - name: Build and verify signed APKs and Android App Bundle
+        if: inputs.release_version != ''
+        env:
+          BUILD_VERSION: ${{ inputs.release_version }}
+          BUILD_NUMBER: ${{ inputs.android_version_code }}
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          flutter build apk --release
+          flutter build appbundle --release
+          (cd android && ./gradlew :wear:assembleRelease)
+          mkdir -p artifacts
+          cp build/app/outputs/flutter-apk/app-release.apk artifacts/periodify-android.apk
+          cp build/app/outputs/bundle/release/app-release.aab artifacts/periodify-android.aab
+          cp build/wear/outputs/apk/release/wear-release.apk artifacts/periodify-wear-os.apk
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs artifacts/periodify-android.apk > phone-cert.txt
+          "$APKSIGNER" verify --print-certs artifacts/periodify-wear-os.apk > watch-cert.txt
+          diff <(grep 'certificate SHA-256 digest' phone-cert.txt) <(grep 'certificate SHA-256 digest' watch-cert.txt)
+          jarsigner -verify artifacts/periodify-android.aab | tee bundle-signing.txt
+          grep -qx 'jar verified.' bundle-signing.txt
+      - name: Remove signing key
+        if: always() && inputs.release_version != ''
+        run: rm -f "$RUNNER_TEMP/release.jks"
+      - uses: actions/upload-artifact@v4
+        if: inputs.release_version != ''
+        with:
+          name: periodify-android-release
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14
+
+  desktop:
+    name: Desktop (${{ matrix.os }})
+    needs: web
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          cache: true
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+      - run: flutter pub get
+      - name: Compile Windows app
+        if: runner.os == 'Windows'
+        run: flutter build windows --release
+      - name: Sign and package Windows
+        if: runner.os == 'Windows' && inputs.release_version != ''
+        shell: pwsh
+        env:
+          TAG: v${{ inputs.release_version }}
+          WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+        run: |
+          if (-not $env:WINDOWS_PFX_BASE64 -or -not $env:WINDOWS_PFX_PASSWORD) {
+            Write-Output '::warning::Windows compiled. Set the trusted Windows signing secrets to publish the installer.'
+            exit 0
+          }
+          ./scripts/package-windows.ps1
+      - name: Compile macOS app
+        if: runner.os == 'macOS'
+        run: flutter build macos --release
+      - name: Sign, package and notarize macOS
+        if: runner.os == 'macOS' && inputs.release_version != ''
+        env:
+          MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [[ -z "$MACOS_CERTIFICATE_BASE64" || -z "$MACOS_CERTIFICATE_PASSWORD" || -z "$MACOS_SIGNING_IDENTITY" || -z "$APPLE_ID" || -z "$APPLE_APP_PASSWORD" || -z "$APPLE_TEAM_ID" ]]; then
+            echo '::warning::macOS compiled. Set the Developer ID and notarization secrets to publish the disk image.'
+            exit 0
+          fi
+          bash scripts/package-macos.sh
+      - name: Compile Linux app
+        if: runner.os == 'Linux'
+        run: flutter build linux --release
+      - name: Sign and package Linux
+        if: runner.os == 'Linux' && inputs.release_version != ''
+        env:
+          TAG: v${{ inputs.release_version }}
+          LINUX_GPG_PRIVATE_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY }}
+          LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+          LINUX_GPG_PASSPHRASE_SUFFIX_CR: ${{ vars.LINUX_GPG_PASSPHRASE_SUFFIX_CR }}
+        run: bash scripts/package-linux.sh
+      - name: Check for signed desktop package
+        if: inputs.release_version != ''
+        id: signed
+        shell: bash
+        run: |
+          if compgen -G 'artifacts/*' > /dev/null; then echo 'present=true' >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/upload-artifact@v4
+        if: steps.signed.outputs.present == 'true'
+        with:
+          name: periodify-desktop-${{ matrix.os }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14
