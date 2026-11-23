@@ -28,6 +28,10 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter analyze && flutter test && flutter build web --release
+      - name: Record build provenance
+        run: |
+          jq -n --arg commit "$(git rev-parse HEAD)" --arg release "$TAG" \
+            '{commit: $commit, release: $release}' > build/web/build-info.json
       - run: cd build/web && zip -r ../../periodify-web.zip .
       - uses: actions/upload-artifact@v4
         with:
@@ -43,7 +47,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: web
-      - run: unzip -q periodify-web.zip -d build/web
+      - run: mkdir -p build/web && unzip -q periodify-web.zip -d build/web
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -61,7 +65,8 @@ jobs:
           test -n "$WEB_URL" || { echo 'Missing PERIODIFY_WEB_URL'; exit 1; }
           pnpm install --frozen-lockfile
           pnpm exec cf deploy ./build/web
-          curl --fail --retry 5 --retry-delay 5 "${WEB_URL%/}/version.json?release=${TAG}" | jq -e --arg version "${TAG#v}" '.version == $version'
+          curl --fail --retry 5 --retry-delay 5 "${WEB_URL%/}/build-info.json?release=${TAG}" |
+            jq -e --arg release "$TAG" --arg commit "$(git rev-parse HEAD)" '.release == $release and .commit == $commit'
   android:
     runs-on: ubuntu-latest
     env:
@@ -146,6 +151,7 @@ jobs:
         env:
           LINUX_GPG_PRIVATE_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY }}
           LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+          LINUX_GPG_PASSPHRASE_SUFFIX_CR: ${{ vars.LINUX_GPG_PASSPHRASE_SUFFIX_CR }}
         run: bash scripts/package-linux.sh
       - uses: actions/upload-artifact@v4
         with:

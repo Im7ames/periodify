@@ -26,6 +26,11 @@ export GNUPGHOME
 GNUPGHOME=$(mktemp -d)
 trap 'rm -rf "$GNUPGHOME"' EXIT
 printf '%s' "$LINUX_GPG_PRIVATE_KEY" | gpg --batch --import
-printf '%s' "$LINUX_GPG_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --armor --detach-sign artifacts/periodify-linux.deb
+# Preserve compatibility with the existing key created by Windows GnuPG.
+passphrase_format='%s\n'
+if [[ ${LINUX_GPG_PASSPHRASE_SUFFIX_CR:-false} == true ]]; then
+  passphrase_format='%s\r\n'
+fi
+printf "$passphrase_format" "$LINUX_GPG_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --armor --detach-sign artifacts/periodify-linux.deb
 gpg --verify artifacts/periodify-linux.deb.asc artifacts/periodify-linux.deb
 gpg --armor --export > artifacts/linux-signing-key.asc

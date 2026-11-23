@@ -14,6 +14,8 @@ Configure these repository **Actions secrets**:
 
 Configure **Actions variables** `CLOUDFLARE_ACCOUNT_ID` and `PERIODIFY_WEB_URL` (the deployed HTTPS origin).
 
+The original Linux key was generated on Windows with a trailing carriage return in its passphrase. Set the `LINUX_GPG_PASSPHRASE_SUFFIX_CR` Actions variable to `true` for that key. Keep the stored passphrase itself as the printable text.
+
 The same Android key signs phone and watch APKs. Debug keys are for local testing only. Missing production credentials fail the applicable job; there is no unsigned fallback. A Windows/Apple trusted certificate must be obtained from its provider. The Linux `.deb` has a detached `.asc` signature and the public signing key is attached to the release.
 
 ## Workflow

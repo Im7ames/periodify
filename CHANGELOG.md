@@ -1,3 +1,9 @@
+# Periodify 0.1.1
+
+- Fix extraction of the GitHub Actions web build before Cloudflare deployment.
+- Record and verify the source commit and release tag on the deployed site.
+- Preserve compatibility with the existing Linux signing key generated on Windows.
+
 # Periodify 0.1.0 — initial preview
 
 - Flutter app for Android, Windows, macOS, Linux and web, with light, dark and system themes.
