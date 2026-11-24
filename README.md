@@ -5,14 +5,16 @@ An independent Bromcom timetable companion. Flutter powers Android, Windows, mac
 ## Use
 
 1. On Android, Windows or macOS, press **Scrape** and sign in through Bromcom's **Microsoft** button.
-2. Open **My Timetable**, select a teaching week, wait for loading to finish, and press **Scrape visible timetable or homework**. Repeat for additional weeks.
+2. Open **My Timetable**, select a teaching week, wait for loading to finish, and press **Scrape**. For a repeating timetable, set the number of weeks in **Settings → Timetable** before opening Bromcom. Follow the Week A, Week B, and later prompts in one session.
 3. To import homework, reopen the portal, choose **Homework** from the section menu, and press **Scrape**. Only the displayed table is imported; no homework is submitted or modified.
-4. Set period start/end times in Settings if you want the watch to identify current/upcoming lessons. The observed portal table does not supply clock times.
+4. Set period start and end times in **Settings → Timetable** if you want the watch to identify current and upcoming lessons. Bromcom supplies the period labels.
 5. Install the companion on a paired Wear OS watch. Phone and watch must share the same application ID and signing certificate. Saving a snapshot queues it to the watch; you can also press **Sync saved timetable**.
 
 Nothing scrapes on startup, a timer, page navigation, or from the watch. Visiting the portal loads its own pages; extracting and saving data requires the Scrape button.
 
 Web and Linux support local JSON snapshot import/export. Browser same-origin restrictions prevent a hosted web app from reading Bromcom's login session. There is no server-side password or cookie proxy.
+
+The information and downloads page ships at `/landing/` alongside the Flutter web app.
 
 ## Privacy
 

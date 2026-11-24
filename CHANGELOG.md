@@ -1,3 +1,10 @@
+# Periodify 0.1.7
+
+- Configure a repeating timetable and capture its teaching weeks in one guided Bromcom session.
+- Show repeats on the phone, desktop, web, and paired Wear OS watch.
+- Open Appearance, Timetable, and Data on separate Settings pages.
+- Include the Periodify information and downloads page in the web build.
+
 # Periodify 0.1.6
 
 - Integrate Timetable, Watch, and Settings into a custom Windows title bar with window controls.

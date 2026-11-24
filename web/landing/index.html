@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Save your Bromcom timetable for offline access on your phone, desktop and Wear OS watch.">
+  <meta name="color-scheme" content="light dark">
+  <title>Periodify — Your timetable, offline</title>
+  <link id="favicon" rel="icon" type="image/svg+xml" sizes="any" href="../favicon-light.svg" data-dark="../favicon-dark.svg">
+  <link rel="stylesheet" href="style.css">
+  <script defer src="../favicon.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="./">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="../favicon-dark.svg">
+        <img src="../favicon-light.svg" width="32" height="32" alt="">
+      </picture>
+      Periodify
+    </a>
+    <nav aria-label="Main navigation">
+      <a href="#features">Features</a>
+      <a href="#downloads">Downloads</a>
+    </nav>
+  </header>
+  <main>
+    <section class="hero" aria-labelledby="headline">
+      <div class="hero-copy">
+        <h1 id="headline">Your timetable, <em>anywhere.</em></h1>
+        <p>Save your Bromcom lessons and homework, then check what’s next on your phone, computer or Wear OS watch.</p>
+        <div class="actions">
+          <a class="button primary" href="#downloads">Download Periodify</a>
+          <a class="button" href="../">Open the web app</a>
+        </div>
+      </div>
+      <div class="preview" aria-label="Example timetable for a Monday in Week A">
+        <div class="preview-top"><span>Monday</span><span class="week">Week A</span></div>
+        <div class="lesson">
+          <time datetime="09:00">09:00</time>
+          <div><strong>Mathematics</strong><span>Period 1 · Room 17</span></div>
+        </div>
+        <div class="lesson">
+          <time datetime="10:00">10:00</time>
+          <div><strong>Design Technology</strong><span>Period 2 · Workshop</span></div>
+        </div>
+        <div class="lesson">
+          <time datetime="11:20">11:20</time>
+          <div><strong>English</strong><span>Period 3 · Room 9</span></div>
+        </div>
+      </div>
+    </section>
+    <section id="features" class="section" aria-labelledby="features-heading">
+      <h2 id="features-heading">How it works</h2>
+      <div class="features">
+        <article>
+          <h3>Import when you choose</h3>
+          <p>Sign in to Bromcom using your school’s Microsoft account and press Scrape to save the timetable or homework you’re viewing.</p>
+        </article>
+        <article>
+          <h3>Repeat your teaching weeks</h3>
+          <p>Set the number of weeks in your rotation, then capture each week in one session. Your saved timetable is available offline.</p>
+        </article>
+        <article>
+          <h3>Check your wrist</h3>
+          <p>Sync from the Android app to a paired Wear OS watch. Set bell times to see what’s on now and what’s coming up.</p>
+        </article>
+      </div>
+    </section>
+    <section id="downloads" class="section downloads" aria-labelledby="downloads-heading">
+      <div>
+        <h2 id="downloads-heading">Get Periodify</h2>
+        <p>Download the Android, Wear OS, Windows, macOS, or Linux package from GitHub. The web app and Linux can open a snapshot exported from another device.</p>
+      </div>
+      <a class="button primary" href="https://github.com/Im7ames/periodify/releases">View downloads</a>
+    </section>
+  </main>
+  <footer>
+    <span>Independent of Bromcom.</span>
+    <a href="https://github.com/Im7ames/periodify">Source on GitHub</a>
+  </footer>
+</body>
+</html>
