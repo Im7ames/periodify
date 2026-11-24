@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:intl/intl.dart';
 
 import 'model.dart';
 import 'windows_title_bar.dart';
 
 class PortalPage extends StatefulWidget {
-  const PortalPage({super.key, this.previous});
+  const PortalPage({super.key, this.previous, this.repeatWeeks = 0});
   final Snapshot? previous;
+  final int repeatWeeks;
   @override
   State<PortalPage> createState() => _PortalPageState();
 }
@@ -14,8 +16,31 @@ class PortalPage extends StatefulWidget {
 class _PortalPageState extends State<PortalPage> {
   InAppWebViewController? controller;
   bool busy = false;
+  bool homeworkOpen = false;
   String? error;
   double progress = 0;
+  final captured = <Snapshot>[];
+
+  DateTime? get nextWeek => captured.isEmpty
+      ? null
+      : DateTime.parse('${captured.first.week}T00:00:00Z')
+            .add(Duration(days: captured.length * 7));
+
+  String get instructions {
+    if (homeworkOpen) {
+      return 'Open the Homework table, then press Scrape homework.';
+    }
+    if (widget.repeatWeeks <= 1) {
+      return 'Sign in with Microsoft. Open My Timetable, choose a week, then press Scrape.';
+    }
+    final week = ScheduleRotation.label(captured.length);
+    final next = nextWeek;
+    if (next == null) {
+      return 'Open My Timetable after signing in. Choose the teaching week that starts your rotation, then scrape $week.';
+    }
+    return '${ScheduleRotation.label(captured.length - 1)} captured. Select the week starting ${DateFormat('d MMM y').format(next)} in Bromcom, then scrape $week.';
+  }
+
   Future<void> scrape() async {
     if (busy || controller == null) return;
     setState(() {
@@ -32,6 +57,11 @@ class _PortalPageState extends State<PortalPage> {
         );
       }
       if (url?.path.toLowerCase() == '/homework') {
+        if (captured.isNotEmpty) {
+          throw const FormatException(
+            'Finish the timetable rotation before scraping homework.',
+          );
+        }
         final previous = widget.previous;
         if (previous == null) {
           throw const FormatException(
@@ -45,14 +75,7 @@ class _PortalPageState extends State<PortalPage> {
         if (mounted) {
           Navigator.pop(
             context,
-            Snapshot(
-              lessons: previous.lessons,
-              scrapedAt: previous.scrapedAt,
-              week: previous.week,
-              school: previous.school,
-              homework: homework,
-              homeworkAt: DateTime.now(),
-            ),
+            previous.withHomework(homework, DateTime.now()),
           );
         }
         return;
@@ -69,30 +92,23 @@ class _PortalPageState extends State<PortalPage> {
       })()''',
       );
       final result = parseTimetable(source as String? ?? '');
-      if (mounted) {
-        Navigator.pop(
-          context,
-          Snapshot(
-            lessons:
-                [
-                  ...?widget.previous?.lessons.where((l) {
-                    final d = DateTime.parse(l.date);
-                    final start = DateTime.parse(result.week);
-                    return d.isBefore(start) ||
-                        !d.isBefore(start.add(const Duration(days: 7)));
-                  }),
-                  ...result.lessons,
-                ]..sort((a, b) {
-                  final day = a.date.compareTo(b.date);
-                  return day != 0 ? day : a.order.compareTo(b.order);
-                }),
-            scrapedAt: result.scrapedAt,
-            week: result.week,
-            homework: widget.previous?.homework ?? [],
-            homeworkAt: widget.previous?.homeworkAt,
-          ),
+      final next = nextWeek;
+      if (next != null && result.week != dayKey(next)) {
+        throw FormatException(
+          'Select the week starting ${DateFormat('d MMM y').format(next)} for ${ScheduleRotation.label(captured.length)}.',
         );
       }
+      if (!mounted) return;
+      captured.add(result);
+      if (captured.length < widget.repeatWeeks) return;
+
+      final rotation = widget.repeatWeeks == 0
+          ? null
+          : ScheduleRotation(widget.repeatWeeks, captured.first.teachingWeek);
+      Navigator.pop(
+        context,
+        mergeTimetableWeeks(widget.previous, captured, rotation),
+      );
     } catch (e) {
       if (mounted) {
         setState(
@@ -134,10 +150,14 @@ class _PortalPageState extends State<PortalPage> {
           children: [
             Padding(
               padding: const EdgeInsets.all(16),
-              child: Text(
-                error ?? 'Sign in using Bromcom’s Microsoft button. Select a week in My Timetable, then press Scrape. Your password stays in the sign-in page.',
-              ),
+              child: Text(error ?? instructions),
             ),
+            if (widget.repeatWeeks > 1)
+              LinearProgressIndicator(
+                value: captured.length / widget.repeatWeeks,
+                semanticsLabel:
+                    '${captured.length} of ${widget.repeatWeeks} weeks captured',
+              ),
             if (progress < 1) LinearProgressIndicator(value: progress),
             Expanded(
               child: InAppWebView(
@@ -152,6 +172,13 @@ class _PortalPageState extends State<PortalPage> {
                 onWebViewCreated: (c) => controller = c,
                 onProgressChanged: (_, value) {
                   if (mounted) setState(() => progress = value / 100);
+                },
+                onLoadStop: (_, url) {
+                  if (!mounted) return;
+                  final isHomework =
+                      url?.host == 'www.bromcomvle.com' &&
+                      url?.path.toLowerCase() == '/homework';
+                  setState(() => homeworkOpen = isHomework);
                 },
                 shouldOverrideUrlLoading: (_, action) async =>
                     action.request.url?.scheme == 'https'
@@ -169,6 +196,10 @@ class _PortalPageState extends State<PortalPage> {
                   label: Text(
                     busy
                         ? 'Reading portal…'
+                        : homeworkOpen
+                        ? 'Scrape homework'
+                        : widget.repeatWeeks > 1
+                        ? 'Scrape ${ScheduleRotation.label(captured.length)}'
                         : 'Scrape visible timetable or homework',
                   ),
                 ),

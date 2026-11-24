@@ -23,6 +23,8 @@ const _destinations = [
   (label: 'Settings', icon: Icons.tune),
 ];
 
+enum _SettingsPage { appearance, timetable, data }
+
 class PeriodifyApp extends StatefulWidget {
   const PeriodifyApp({super.key});
   @override
@@ -80,6 +82,8 @@ class _HomeState extends State<Home> {
   Snapshot? snapshot;
   bool loading = true, busy = false;
   int page = 0;
+  int repeatWeeks = 0;
+  _SettingsPage? settingsPage;
   DateTime selected = DateUtils.dateOnly(DateTime.now());
   Map<String, String> bells = {};
   String watchStatus = 'Ready when your watch is';
@@ -108,6 +112,12 @@ class _HomeState extends State<Home> {
       final p = await SharedPreferences.getInstance();
       final raw = p.getString('snapshot');
       if (raw != null) snapshot = Snapshot.decode(raw);
+      final savedRepeat = p.getInt('repeatWeeks') ?? 0;
+      repeatWeeks =
+          snapshot?.rotation?.weeks ??
+          (savedRepeat >= 0 && savedRepeat <= ScheduleRotation.maxWeeks
+              ? savedRepeat
+              : 0);
       final b = p.getString('bells');
       if (b != null) bells = Map<String, String>.from(jsonDecode(b) as Map);
       final t = p.getInt('theme');
@@ -124,13 +134,19 @@ class _HomeState extends State<Home> {
     setState(() => busy = true);
     try {
       final p = await SharedPreferences.getInstance();
+      if (result.rotation == null && repeatWeeks > 0) {
+        result = result.withRotation(
+          ScheduleRotation(repeatWeeks, result.teachingWeek),
+        );
+      }
       if (!await p.setString('snapshot', result.encode())) {
         throw StateError('Storage failed');
       }
       if (!mounted) return;
       setState(() {
         snapshot = result;
-        selected = DateTime.parse(result.lessons.first.date);
+        repeatWeeks = result.rotation?.weeks ?? 0;
+        selected = result.teachingWeek;
       });
       notice('Saved on this device. Available offline.');
       if (android) await syncWatch();
@@ -162,7 +178,10 @@ class _HomeState extends State<Home> {
     }
     final result = await Navigator.push<Snapshot>(
       context,
-      MaterialPageRoute(builder: (_) => PortalPage(previous: snapshot)),
+      MaterialPageRoute(
+        builder: (_) =>
+            PortalPage(previous: snapshot, repeatWeeks: repeatWeeks),
+      ),
     );
     if (result != null && mounted) await save(result);
   }
@@ -210,10 +229,25 @@ class _HomeState extends State<Home> {
   }
 
   Future<void> syncWatch() async {
-    if (!android || snapshot == null) return;
+    final current = snapshot;
+    if (!android || current == null) return;
     try {
-      final data = jsonDecode(snapshot!.encode()) as Map<String, dynamic>;
-      data['bells'] = bells;
+      final data = {
+        'schema': 1,
+        'scrapedAt': current.scrapedAt.toUtc().toIso8601String(),
+        if (current.rotation case final rotation?)
+          'rotation': rotation.toJson(),
+        'bells': bells,
+        'lessons': [
+          for (final lesson in current.lessons)
+            {
+              'date': lesson.date,
+              'period': lesson.period,
+              'subject': lesson.subject,
+              'room': lesson.room,
+            },
+        ],
+      };
       await watch.invokeMethod<void>('sync', jsonEncode(data));
       if (mounted) setState(() => watchStatus = 'Queued for your paired watch');
     } catch (_) {
@@ -258,7 +292,42 @@ class _HomeState extends State<Home> {
     await p.setInt('theme', m.index);
   }
 
-  void selectPage(int index) => setState(() => page = index);
+  Future<void> setRepeatWeeks(int weeks) async {
+    if (busy || repeatWeeks == weeks) return;
+    setState(() => busy = true);
+    try {
+      final p = await SharedPreferences.getInstance();
+      final current = snapshot;
+      final updated = current?.withRotation(
+        weeks == 0
+            ? null
+            : ScheduleRotation(
+                weeks,
+                current.rotation?.start ?? current.teachingWeek,
+              ),
+      );
+      if (!await p.setInt('repeatWeeks', weeks) ||
+          (updated != null &&
+              !await p.setString('snapshot', updated.encode()))) {
+        throw StateError('Storage failed');
+      }
+      if (!mounted) return;
+      setState(() {
+        repeatWeeks = weeks;
+        snapshot = updated;
+      });
+      if (android) await syncWatch();
+    } catch (_) {
+      if (mounted) notice('Could not save the schedule rotation.');
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  void selectPage(int index) => setState(() {
+    page = index;
+    settingsPage = null;
+  });
 
   PreferredSizeWidget windowsTitleBar(BuildContext context) {
     final media = MediaQuery.of(context);
@@ -458,10 +527,10 @@ class _HomeState extends State<Home> {
     child: Padding(padding: const EdgeInsets.all(24), child: child),
   );
   List<Widget> timetable() {
-    final lessons =
-        snapshot?.lessons.where((l) => l.date == dayKey(selected)).toList() ??
-        <Lesson>[];
-    final week = selected.subtract(Duration(days: selected.weekday - 1));
+    final current = snapshot;
+    final lessons = current?.lessonsFor(selected) ?? <Lesson>[];
+    final week = weekStart(selected);
+    final rotation = current?.rotation;
     return [
       Text(
         'Timetable',
@@ -519,13 +588,23 @@ class _HomeState extends State<Home> {
         Text(
           'Saved ${DateFormat('d MMM, HH:mm').format(snapshot!.scrapedAt.toLocal())} · Updates only when you scrape',
         ),
+        if (rotation != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            '${ScheduleRotation.label(rotation.indexFor(selected))} of rotation${current!.hasWeek(selected) ? '' : ' · Repeating timetable'}',
+          ),
+        ],
         const SizedBox(height: 24),
         Row(
           children: [
             IconButton(
               tooltip: 'Previous week',
               onPressed: () => setState(
-                () => selected = selected.subtract(const Duration(days: 7)),
+                () => selected = DateTime(
+                  selected.year,
+                  selected.month,
+                  selected.day - 7,
+                ),
               ),
               icon: const Icon(Icons.chevron_left),
             ),
@@ -542,7 +621,11 @@ class _HomeState extends State<Home> {
             IconButton(
               tooltip: 'Next week',
               onPressed: () => setState(
-                () => selected = selected.add(const Duration(days: 7)),
+                () => selected = DateTime(
+                  selected.year,
+                  selected.month,
+                  selected.day + 7,
+                ),
               ),
               icon: const Icon(Icons.chevron_right),
             ),
@@ -717,33 +800,103 @@ class _HomeState extends State<Home> {
       ),
     ),
   ];
-  List<Widget> settings() => [
-    ...heading(
-      'Make it yours',
-      'Small details. Better days.',
-      'Your data and preferences stay on this device.',
-    ),
+  List<Widget> settings() {
+    final pages = <_SettingsPage, (String, String, IconData)>{
+      _SettingsPage.appearance: ('Appearance', 'Theme', Icons.palette_outlined),
+      _SettingsPage.timetable: (
+        'Timetable',
+        'Schedule rotation and bell times',
+        Icons.calendar_view_week_outlined,
+      ),
+      _SettingsPage.data: (
+        'Data',
+        'Import, export and clear snapshots',
+        Icons.storage_outlined,
+      ),
+    };
+    final section = settingsPage;
+    return [
+      if (section != null)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => setState(() => settingsPage = null),
+            icon: const Icon(Icons.arrow_back, size: 18),
+            label: const Text('Settings'),
+          ),
+        ),
+      Text(
+        section == null ? 'Settings' : pages[section]!.$1,
+        style: Theme.of(context).textTheme.headlineLarge
+            ?.copyWith(fontWeight: FontWeight.w700),
+      ),
+      const SizedBox(height: 20),
+      ...switch (section) {
+        null => [
+          for (final entry in pages.entries)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Card(
+                child: ListTile(
+                  leading: Icon(entry.value.$3),
+                  title: Text(entry.value.$1),
+                  subtitle: Text(entry.value.$2),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => setState(() => settingsPage = entry.key),
+                ),
+              ),
+            ),
+        ],
+        _SettingsPage.appearance => [
+          panel(
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final theme in ThemeMode.values)
+                  ChoiceChip(
+                    label: Text(theme.name),
+                    selected: widget.mode == theme,
+                    onSelected: (_) => setTheme(theme),
+                  ),
+              ],
+            ),
+          ),
+        ],
+        _SettingsPage.timetable => timetableSettings(),
+        _SettingsPage.data => dataSettings(),
+      },
+    ];
+  }
+
+  List<Widget> timetableSettings() => [
     panel(
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Appearance',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+          DropdownButtonFormField<int>(
+            initialValue: repeatWeeks,
+            decoration: const InputDecoration(labelText: 'Schedule rotation'),
+            isExpanded: true,
+            items: [
+              const DropdownMenuItem(value: 0, child: Text('No repeat')),
+              for (var weeks = 1; weeks <= ScheduleRotation.maxWeeks; weeks++)
+                DropdownMenuItem(
+                  value: weeks,
+                  child: Text('Every $weeks ${weeks == 1 ? 'week' : 'weeks'}'),
+                ),
+            ],
+            onChanged: busy
+                ? null
+                : (weeks) {
+                    if (weeks != null) setRepeatWeeks(weeks);
+                  },
           ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: ThemeMode.values
-                .map(
-                  (m) => ChoiceChip(
-                    label: Text(m.name),
-                    selected: widget.mode == m,
-                    onSelected: (_) => setTheme(m),
-                  ),
-                )
-                .toList(),
+          const SizedBox(height: 12),
+          Text(
+            repeatWeeks > 0
+                ? 'Scrape $repeatWeeks ${repeatWeeks == 1 ? 'teaching week' : 'consecutive teaching weeks'} in one session to set your rotation.'
+                : 'Show lessons on the dates you saved from Bromcom.',
           ),
         ],
       ),
@@ -776,7 +929,9 @@ class _HomeState extends State<Home> {
         ],
       ),
     ),
-    const SizedBox(height: 16),
+  ];
+
+  List<Widget> dataSettings() => [
     panel(
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -794,6 +949,11 @@ class _HomeState extends State<Home> {
             spacing: 12,
             runSpacing: 12,
             children: [
+              OutlinedButton.icon(
+                onPressed: busy ? null : importData,
+                icon: const Icon(Icons.file_open_outlined),
+                label: const Text('Import'),
+              ),
               OutlinedButton.icon(
                 onPressed: snapshot == null ? null : exportData,
                 icon: const Icon(Icons.ios_share),

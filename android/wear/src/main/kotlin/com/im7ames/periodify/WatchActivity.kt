@@ -10,9 +10,11 @@ import android.graphics.Typeface
 import android.view.Gravity
 import android.widget.*
 import com.google.android.gms.wearable.*
+import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.temporal.ChronoUnit
 
 class WatchActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListener {
     private val preferences by lazy { getSharedPreferences("periodify", MODE_PRIVATE) }
@@ -29,6 +31,21 @@ class WatchActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeList
     override fun onResume() { super.onResume(); preferences.registerOnSharedPreferenceChangeListener(this); handler.post(tick) }
     override fun onPause() { handler.removeCallbacks(tick); preferences.unregisterOnSharedPreferenceChangeListener(this); super.onPause() }
     override fun onSharedPreferenceChanged(p: SharedPreferences?, key: String?) { runOnUiThread { render() } }
+
+    private fun scheduleDay(today: LocalDate, lessons: JSONArray, rotation: JSONObject?): LocalDate {
+        val start = today.minusDays((today.dayOfWeek.value - 1).toLong())
+        val end = start.plusDays(6)
+        val weeks = rotation?.optInt("weeks") ?: 0
+        if (weeks !in 1..12) return today
+        for (i in 0 until lessons.length()) {
+            val date = LocalDate.parse(lessons.getJSONObject(i).getString("date"))
+            if (!date.isBefore(start) && !date.isAfter(end)) return today
+        }
+        val anchor = LocalDate.parse(rotation!!.getString("start"))
+        val index = Math.floorMod(ChronoUnit.WEEKS.between(anchor, start), weeks.toLong())
+        return anchor.plusWeeks(index).plusDays((today.dayOfWeek.value - 1).toLong())
+    }
+
     private fun render() {
         val scale = resources.displayMetrics.density
         val content = LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER_HORIZONTAL; setPadding((28*scale).toInt(),(32*scale).toInt(),(28*scale).toInt(),(32*scale).toInt()) }
@@ -38,11 +55,15 @@ class WatchActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeList
         val raw=preferences.getString("snapshot","") ?: ""
         if(raw.isEmpty()) { text("Your day, on your wrist",20f); text("Open Periodify on your phone. Scrape a week, then sync.",14f); setContentView(scroll); return }
         try {
-            val data=JSONObject(raw); val today=LocalDate.now().toString(); val lessons=data.getJSONArray("lessons");val bells=data.optJSONObject("bells") ?: JSONObject()
-            text(LocalDate.now().dayOfWeek.toString().lowercase().replaceFirstChar{it.uppercase()},14f,true)
+            val data = JSONObject(raw)
+            val today = LocalDate.now()
+            val lessons = data.getJSONArray("lessons")
+            val bells = data.optJSONObject("bells") ?: JSONObject()
+            val sourceDay = scheduleDay(today, lessons, data.optJSONObject("rotation")).toString()
+            text(today.dayOfWeek.toString().lowercase().replaceFirstChar{it.uppercase()},14f,true)
             var count=0
             for(i in 0 until lessons.length()) {
-                val l=lessons.getJSONObject(i);if(l.getString("date")!=today)continue
+                val l=lessons.getJSONObject(i);if(l.getString("date")!=sourceDay)continue
                 val period=l.getString("period"); val times=bells.optString(period,""); var status=period
                 if(times.contains("-")) { val parts=times.split("-"); val now=LocalTime.now();val start=LocalTime.parse(parts[0]);val end=LocalTime.parse(parts[1]);if(!now.isBefore(end))continue; status=if(!now.isBefore(start)) "NOW · $period" else "UPCOMING · $period" }
                 text(status,12f,true);text(l.getString("subject"),21f);text(l.optString("room"),18f,true);if(times.isNotEmpty())text(times,14f);count++

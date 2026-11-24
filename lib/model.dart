@@ -5,6 +5,37 @@ import 'package:html/parser.dart' as html;
 String dayKey(DateTime date) =>
     '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
+DateTime weekStart(DateTime date) =>
+    DateTime.utc(date.year, date.month, date.day - date.weekday + 1);
+
+class ScheduleRotation {
+  const ScheduleRotation(this.weeks, this.start);
+
+  static const maxWeeks = 12;
+  final int weeks;
+  final DateTime start;
+
+  static String label(int index) => 'Week ${String.fromCharCode(65 + index)}';
+
+  int indexFor(DateTime date) =>
+      (weekStart(date).difference(weekStart(start)).inDays ~/ 7) % weeks;
+
+  DateTime sourceDay(DateTime date) =>
+      weekStart(start)
+          .add(Duration(days: indexFor(date) * 7 + date.weekday - 1));
+
+  Map<String, Object> toJson() => {'weeks': weeks, 'start': dayKey(start)};
+
+  static ScheduleRotation? fromJson(Object? value) {
+    if (value == null) return null;
+    if (value case {'weeks': final int weeks, 'start': final String start}
+        when weeks > 0 && weeks <= maxWeeks) {
+      return ScheduleRotation(weeks, weekStart(DateTime.parse(start)));
+    }
+    throw const FormatException('Invalid schedule rotation.');
+  }
+}
+
 class Lesson {
   const Lesson({
     required this.date,
@@ -45,12 +76,65 @@ class Snapshot {
     this.school = '',
     this.homework = const [],
     this.homeworkAt,
+    this.rotation,
   });
   final List<Lesson> lessons;
   final DateTime scrapedAt;
   final String week, school;
   final List<Map<String, String>> homework;
   final DateTime? homeworkAt;
+  final ScheduleRotation? rotation;
+
+  // Bromcom may label a teaching week by the preceding Sunday.
+  DateTime get teachingWeek {
+    final portalDate = DateTime.parse(week);
+    return DateTime.utc(
+      portalDate.year,
+      portalDate.month,
+      portalDate.day + (DateTime.monday - portalDate.weekday) % 7,
+    );
+  }
+
+  bool hasWeek(DateTime date) {
+    final start = weekStart(date);
+    final first = dayKey(start);
+    final last = dayKey(start.add(const Duration(days: 6)));
+    return lessons.any(
+      (lesson) =>
+          lesson.date.compareTo(first) >= 0 && lesson.date.compareTo(last) <= 0,
+    );
+  }
+
+  List<Lesson> lessonsFor(DateTime date) {
+    final cycle = rotation;
+    final source = cycle != null && !hasWeek(date)
+        ? cycle.sourceDay(date)
+        : date;
+    final key = dayKey(source);
+    return lessons.where((lesson) => lesson.date == key).toList();
+  }
+
+  Snapshot withRotation(ScheduleRotation? value) => Snapshot(
+    lessons: lessons,
+    scrapedAt: scrapedAt,
+    week: week,
+    school: school,
+    homework: homework,
+    homeworkAt: homeworkAt,
+    rotation: value,
+  );
+
+  Snapshot withHomework(List<Map<String, String>> items, DateTime time) =>
+      Snapshot(
+        lessons: lessons,
+        scrapedAt: scrapedAt,
+        week: week,
+        school: school,
+        homework: items,
+        homeworkAt: time,
+        rotation: rotation,
+      );
+
   String encode() => jsonEncode({
     'schema': 1,
     'scrapedAt': scrapedAt.toUtc().toIso8601String(),
@@ -59,6 +143,7 @@ class Snapshot {
     'lessons': lessons.map((e) => e.toJson()).toList(),
     'homework': homework,
     'homeworkAt': homeworkAt?.toUtc().toIso8601String(),
+    if (rotation != null) 'rotation': rotation!.toJson(),
   });
   factory Snapshot.decode(String source) {
     if (source.length > 2000000) {
@@ -71,7 +156,8 @@ class Snapshot {
     final lessons = (j['lessons'] as List)
         .map((e) => Lesson.fromJson(e as Map<String, dynamic>))
         .toList();
-    if (lessons.length > 2000 ||
+    final week = j['week'] as String;
+    if (DateTime.tryParse(week) == null ||
         lessons.any(
           (e) =>
               DateTime.tryParse(e.date) == null ||
@@ -83,7 +169,7 @@ class Snapshot {
     return Snapshot(
       lessons: lessons,
       scrapedAt: DateTime.parse(j['scrapedAt'] as String),
-      week: j['week'] as String,
+      week: week,
       school: j['school'] as String? ?? '',
       homework: (j['homework'] as List? ?? [])
           .map((e) => Map<String, String>.from(e as Map))
@@ -91,8 +177,39 @@ class Snapshot {
       homeworkAt: j['homeworkAt'] == null
           ? null
           : DateTime.parse(j['homeworkAt'] as String),
+      rotation: ScheduleRotation.fromJson(j['rotation']),
     );
   }
+}
+
+Snapshot mergeTimetableWeeks(
+  Snapshot? previous,
+  List<Snapshot> captured,
+  ScheduleRotation? rotation,
+) {
+  final replaced = {for (final week in captured) week.teachingWeek};
+  final lessons =
+      [
+        ...?previous?.lessons.where(
+          (lesson) =>
+              !replaced.contains(weekStart(DateTime.parse(lesson.date))),
+        ),
+        for (final week in captured) ...week.lessons,
+      ]..sort((a, b) {
+        final byDate = a.date.compareTo(b.date);
+        return byDate != 0 ? byDate : a.order.compareTo(b.order);
+      });
+  return Snapshot(
+    lessons: lessons,
+    scrapedAt: captured.last.scrapedAt,
+    week: captured.first.week,
+    school: captured.last.school.isEmpty
+        ? previous?.school ?? ''
+        : captured.last.school,
+    homework: previous?.homework ?? [],
+    homeworkAt: previous?.homeworkAt,
+    rotation: rotation,
+  );
 }
 
 List<Map<String, String>> parseHomework(String source) {

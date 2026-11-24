@@ -41,6 +41,45 @@ void main() {
     expect(Snapshot.decode(result.encode()).lessons.single.period, 'P1');
     expect(() => Snapshot.decode('{"schema":2}'), throwsFormatException);
   });
+  test('rotations keep exact dates and repeat the selected teaching weeks', () {
+    final weekA = parseTimetable(fixture());
+    final weekB = parseTimetable(
+      fixture(start: '01-03-2027').replaceAll('Mathematics', 'English'),
+    );
+    final later =
+        parseTimetable(
+          fixture(start: '01-24-2027').replaceAll('Mathematics', 'Science'),
+        ).withHomework([
+          {'title': 'Read chapter'},
+        ], DateTime.utc(2027, 1, 25));
+    final snapshot = Snapshot.decode(
+      mergeTimetableWeeks(later, [
+        weekA,
+        weekB,
+      ], ScheduleRotation(2, weekA.teachingWeek)).encode(),
+    );
+
+    expect(weekA.teachingWeek, DateTime.utc(2026, 12, 28));
+    expect(
+      snapshot.lessonsFor(DateTime(2027, 1, 11)).single.subject,
+      'Mathematics',
+    );
+    expect(
+      snapshot.lessonsFor(DateTime(2027, 1, 18)).single.subject,
+      'English',
+    );
+    expect(
+      snapshot.lessonsFor(DateTime(2027, 1, 25)).single.subject,
+      'Science',
+    );
+    expect(snapshot.lessonsFor(DateTime(2027, 1, 26)), isEmpty);
+    expect(
+      snapshot.lessonsFor(DateTime(2026, 12, 21)).single.subject,
+      'English',
+    );
+    expect(snapshot.homework.single['title'], 'Read chapter');
+    expect(later.lessonsFor(DateTime(2027, 2, 1)), isEmpty);
+  });
   test('homework maps rendered columns and preserves submission status', () {
     final result = parseHomework(
       '<table id="HomeworkTable"><tbody><tr><td>04/01/2027</td><td>Homework</td><td>Read chapter</td><td>Group</td><td>English</td><td>Example</td><td>Not Due</td><td>Offline</td><td></td><td></td></tr></tbody></table>',

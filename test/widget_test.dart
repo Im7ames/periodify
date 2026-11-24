@@ -27,6 +27,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Appearance'), findsOneWidget);
       expect(tester.takeException(), isNull);
+      await tester.tap(find.text('Appearance'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('dark'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
@@ -69,6 +71,8 @@ void main() {
       expect(find.text('Sync saved timetable'), findsOneWidget);
       await tester.tap(destination('Settings'));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('Appearance'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('dark'));
       await tester.pumpAndSettle();
       expect(
@@ -86,4 +90,24 @@ void main() {
       expect(tester.takeException(), isNull);
     }, variant: const TargetPlatformVariant({TargetPlatform.windows}));
   }
+
+  testWidgets('opens timetable settings and persists the selected rotation', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(const PeriodifyApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bell times'), findsNothing);
+    await tester.tap(find.widgetWithText(ListTile, 'Timetable'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('No repeat'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Every 2 weeks').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Every 2 weeks'), findsOneWidget);
+    final preferences = await SharedPreferences.getInstance();
+    expect(preferences.getInt('repeatWeeks'), 2);
+  });
 }
