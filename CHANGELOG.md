@@ -1,3 +1,8 @@
+# Periodify 0.1.5
+
+- Publish an unsigned Windows installer and an unnotarized macOS disk image as labelled previews.
+- Keep signing Android, Wear OS, and Linux packages with the existing keys.
+
 # Periodify 0.1.4
 
 - Use a shared build workflow for CI and tagged releases, with a manual dry run.

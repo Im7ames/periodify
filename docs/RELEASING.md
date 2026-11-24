@@ -16,9 +16,11 @@ Cloudflare deployment is opt-in. Set the `CLOUDFLARE_API_TOKEN` secret and `CLOU
 
 The original Linux key was generated on Windows with a trailing carriage return in its passphrase. Set the `LINUX_GPG_PASSPHRASE_SUFFIX_CR` Actions variable to `true` for that key. Keep the stored passphrase itself as the printable text.
 
-The same Android key signs the phone APK, Wear OS APK and Android App Bundle. Debug builds are for testing. Missing Android or Linux credentials fail the release build. Windows and macOS compilation runs independently, and downloads require their trusted signing credentials. The Linux `.deb` has a detached `.asc` signature and the public signing key is attached to the release.
+The same Android key signs the phone APK, Wear OS APK and Android App Bundle. Debug builds are for testing. Missing Android or Linux credentials fail the release build. The Linux `.deb` has a detached `.asc` signature and the public signing key is attached to the release.
 
-Windows and macOS compilation is checked separately from signing. A successful compilation is visible in Actions even if credentials are missing. For Windows, the current workflow accepts a PFX with the private key for a trusted Authenticode certificate. A hardware-backed certificate or managed signing service needs its provider's signing integration instead. For macOS, export a **Developer ID Application** certificate and private key to a password-protected `.p12` and configure the Apple notarization credentials above. Add credentials through the repository's Actions secret settings.
+Desktop previews are the default. GitHub attaches `periodify-windows-unsigned.exe` and `periodify-macos-unnotarized.dmg` with labels in the download table and update manifest. Windows or macOS may warn about or block these previews.
+
+To enable trusted desktop signing for future releases, configure both platforms' Actions secrets and set `PERIODIFY_SIGN_DESKTOP` to `true`. Windows accepts a PFX with the private key for a trusted Authenticode certificate. A hardware-backed certificate or managed signing service needs its provider's signing integration. macOS accepts a password-protected `.p12` containing a **Developer ID Application** certificate and private key and requires the Apple notarization credentials. If enabled, a signing failure blocks publication.
 
 ## Workflow
 

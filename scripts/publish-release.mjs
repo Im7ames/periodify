@@ -4,7 +4,6 @@ import { readFile, readdir, writeFile } from 'node:fs/promises';
 
 const tag = process.env.TAG;
 const repo = process.env.GITHUB_REPOSITORY;
-const runId = process.env.GITHUB_RUN_ID;
 const mode = process.argv[2];
 if (!/^v\d+\.\d+\.\d+$/.test(tag ?? '')) throw new Error('Invalid release tag');
 if (!/^[\w.-]+\/[\w.-]+$/.test(repo ?? '')) throw new Error('Invalid repository');
@@ -25,20 +24,40 @@ const required = [
   packages.Android, packages['Android App Bundle'], packages['Wear OS'],
   packages['Linux x64'], packages.Web, 'periodify-linux.deb.asc', 'linux-signing-key.asc',
 ];
-const optional = [packages['Windows x64'], packages.macOS];
+const previews = {
+  'Windows x64': { name: 'periodify-windows-unsigned.exe', label: 'Unsigned preview' },
+  macOS: { name: 'periodify-macos-unnotarized.dmg', label: 'Unnotarized preview' },
+};
 const checkFile = 'SHA256SUMS.txt';
 const updateFile = 'updates.json';
 const files = new Set(await readdir('artifacts'));
 for (const name of required) {
   if (!files.has(name)) throw new Error(`Required release file missing: ${name}`);
 }
-const attached = [...required, ...optional.filter((name) => files.has(name))].sort();
+const selectedPreviews = new Map();
+for (const [platform, preview] of Object.entries(previews)) {
+  const signedName = packages[platform];
+  if (files.has(signedName) && files.has(preview.name)) {
+    throw new Error(`Both release variants are present for ${platform}`);
+  }
+  if (files.has(signedName)) {
+    required.push(signedName);
+  } else if (files.has(preview.name)) {
+    required.push(preview.name);
+    selectedPreviews.set(platform, preview);
+  } else {
+    throw new Error(`Required release file missing for ${platform}`);
+  }
+}
+const attached = required.sort();
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
 if (mode === '--prepare') {
   const assets = await Promise.all(attached.map(async (name) => {
     const bytes = await readFile(`artifacts/${name}`);
-    return { name, size: bytes.length, sha256: hash(bytes), url: download(name) };
+    const asset = { name, size: bytes.length, sha256: hash(bytes), url: download(name) };
+    const preview = [...selectedPreviews.values()].find((candidate) => candidate.name === name);
+    return preview ? { ...asset, distribution: 'preview', signing: preview.label } : asset;
   }));
   const manifest = { schema: 1, version: tag.slice(1), releaseUrl: `${origin}/releases/tag/${tag}`, assets };
   await writeFile(`artifacts/${checkFile}`, assets.map((a) => `${a.sha256}  ${a.name}\n`).join(''));
@@ -61,9 +80,10 @@ if (mode === '--prepare') {
   }
   gh(['release', 'upload', tag, path(updateFile), '--clobber']);
 
-  const statusUrl = `${origin}/actions/runs/${runId}`;
   const rows = Object.entries(packages).map(([platform, name]) => {
-    const cell = files.has(name) ? `[${name}](${download(name)})` : `Unavailable · [build status](${statusUrl})`;
+    const preview = selectedPreviews.get(platform);
+    const filename = preview?.name ?? name;
+    const cell = `[${filename}](${download(filename)})${preview ? ` · ${preview.label}` : ''}`;
     return `| ${platform} | ${cell} |`;
   });
   const table = [
@@ -72,7 +92,7 @@ if (mode === '--prepare') {
     '| --- | --- |',
     ...rows,
     '',
-    'Windows and macOS downloads require trusted signing. See the [release setup](' + origin + '/blob/' + tag + '/docs/RELEASING.md).',
+    ...(selectedPreviews.size ? ['Desktop previews lack trusted publisher signing or notarization. Your device may warn about or restrict their installation.', ''] : []),
     '',
     `Checksums: [${checkFile}](${download(checkFile)}). Update manifest: [${updateFile}](${download(updateFile)}).`,
     '<!-- /downloads -->',

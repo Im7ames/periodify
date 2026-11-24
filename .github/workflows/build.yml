@@ -145,24 +145,28 @@ jobs:
       - name: Compile Windows app
         if: runner.os == 'Windows'
         run: flutter build windows --release
+      - name: Package unsigned Windows preview
+        if: runner.os == 'Windows' && inputs.release_version != '' && vars.PERIODIFY_SIGN_DESKTOP != 'true'
+        shell: pwsh
+        env:
+          TAG: v${{ inputs.release_version }}
+        run: ./scripts/package-windows.ps1 -Unsigned
       - name: Sign and package Windows
-        if: runner.os == 'Windows' && inputs.release_version != ''
+        if: runner.os == 'Windows' && inputs.release_version != '' && vars.PERIODIFY_SIGN_DESKTOP == 'true'
         shell: pwsh
         env:
           TAG: v${{ inputs.release_version }}
           WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
           WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
-        run: |
-          if (-not $env:WINDOWS_PFX_BASE64 -or -not $env:WINDOWS_PFX_PASSWORD) {
-            Write-Output '::warning::Windows compiled. Set the trusted Windows signing secrets to publish the installer.'
-            exit 0
-          }
-          ./scripts/package-windows.ps1
+        run: ./scripts/package-windows.ps1
       - name: Compile macOS app
         if: runner.os == 'macOS'
         run: flutter build macos --release
+      - name: Package unnotarized macOS preview
+        if: runner.os == 'macOS' && inputs.release_version != '' && vars.PERIODIFY_SIGN_DESKTOP != 'true'
+        run: bash scripts/package-macos.sh --unnotarized
       - name: Sign, package and notarize macOS
-        if: runner.os == 'macOS' && inputs.release_version != ''
+        if: runner.os == 'macOS' && inputs.release_version != '' && vars.PERIODIFY_SIGN_DESKTOP == 'true'
         env:
           MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
@@ -170,12 +174,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          if [[ -z "$MACOS_CERTIFICATE_BASE64" || -z "$MACOS_CERTIFICATE_PASSWORD" || -z "$MACOS_SIGNING_IDENTITY" || -z "$APPLE_ID" || -z "$APPLE_APP_PASSWORD" || -z "$APPLE_TEAM_ID" ]]; then
-            echo '::warning::macOS compiled. Set the Developer ID and notarization secrets to publish the disk image.'
-            exit 0
-          fi
-          bash scripts/package-macos.sh
+        run: bash scripts/package-macos.sh
       - name: Compile Linux app
         if: runner.os == 'Linux'
         run: flutter build linux --release
@@ -187,14 +186,8 @@ jobs:
           LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
           LINUX_GPG_PASSPHRASE_SUFFIX_CR: ${{ vars.LINUX_GPG_PASSPHRASE_SUFFIX_CR }}
         run: bash scripts/package-linux.sh
-      - name: Check for signed desktop package
-        if: inputs.release_version != ''
-        id: signed
-        shell: bash
-        run: |
-          if compgen -G 'artifacts/*' > /dev/null; then echo 'present=true' >> "$GITHUB_OUTPUT"; fi
       - uses: actions/upload-artifact@v4
-        if: steps.signed.outputs.present == 'true'
+        if: inputs.release_version != ''
         with:
           name: periodify-desktop-${{ matrix.os }}
           path: artifacts/
