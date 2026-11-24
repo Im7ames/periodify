@@ -8,6 +8,7 @@ import android.content.SharedPreferences
 import android.graphics.Color
 import android.graphics.Typeface
 import android.view.Gravity
+import android.view.View
 import android.widget.*
 import com.google.android.gms.wearable.*
 import org.json.JSONArray
@@ -99,7 +100,12 @@ class WatchActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeList
         val content = LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER_HORIZONTAL; setPadding((28*scale).toInt(),(32*scale).toInt(),(28*scale).toInt(),(32*scale).toInt()) }
         val scroll = ScrollView(this).apply { setBackgroundColor(Color.BLACK); addView(content) }
         fun text(value:String,size:Float=16f,accent:Boolean=false, tint: Int = Color.rgb(169,218,184)) { content.addView(TextView(this).apply { text=value; textSize=size; gravity=Gravity.CENTER; setTextColor(if(accent) tint else Color.WHITE); setPadding(0,(7*scale).toInt(),0,(7*scale).toInt()); if(accent) setTypeface(null,Typeface.BOLD) }) }
-        text("periodify",18f,true)
+        content.addView(ImageView(this).apply {
+            setImageResource(R.drawable.periodify_launch_mark)
+            layoutParams = LinearLayout.LayoutParams((32 * scale).toInt(), (32 * scale).toInt())
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        })
+        text("Periodify",18f,true)
         availableUpdate?.let { update ->
             text(updateMessage ?: "Update ${update.version} available", 14f)
             content.addView(Button(this).apply {
@@ -115,14 +121,28 @@ class WatchActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeList
             val today = LocalDate.now()
             val lessons = data.getJSONArray("lessons")
             val bells = data.optJSONObject("bells") ?: JSONObject()
+            val periodNames = data.optJSONObject("periodNames") ?: JSONObject()
             val sourceDay = scheduleDay(today, lessons, data.optJSONObject("rotation")).toString()
             text(today.dayOfWeek.toString().lowercase().replaceFirstChar{it.uppercase()},14f,true)
-            var count=0
-            for(i in 0 until lessons.length()) {
-                val l=lessons.getJSONObject(i);if(l.getString("date")!=sourceDay)continue
-                val period=l.getString("period"); val times=bells.optString(period,""); var status=period
-                if(times.contains("-")) { val parts=times.split("-"); val now=LocalTime.now();val start=LocalTime.parse(parts[0]);val end=LocalTime.parse(parts[1]);if(!now.isBefore(end))continue; status=if(!now.isBefore(start)) "NOW · $period" else "UPCOMING · $period" }
-                text(status,12f,true,lessonAccent(l.optString("color")));text(l.getString("subject"),21f);text(l.optString("room"),18f,true);if(times.isNotEmpty())text(times,14f);count++
+            val now = LocalTime.now()
+            var count = 0
+            for (i in 0 until lessons.length()) {
+                val lesson = lessons.getJSONObject(i)
+                if (lesson.getString("date") != sourceDay) continue
+                val label = lesson.getString("period")
+                val name = periodNames.optString(label, label)
+                val times = bells.optString(label)
+                var status = name
+                if (times.contains('-')) {
+                    val (start, end) = times.split('-', limit = 2).map { LocalTime.parse(it) }
+                    if (!now.isBefore(end)) continue
+                    status = if (now.isBefore(start)) "UPCOMING · $name" else "NOW · $name"
+                }
+                text(status, 12f, true, lessonAccent(lesson.optString("color")))
+                text(lesson.getString("subject"), 21f)
+                text(lesson.optString("room"), 18f, true)
+                if (times.isNotEmpty()) text(times, 14f)
+                count++
             }
             if(count==0)text("No upcoming lessons saved for today.",17f)
             text("Saved ${data.getString("scrapedAt").take(10)}",12f)

@@ -5,6 +5,7 @@ set -euo pipefail
 test -d build/linux/x64/release/bundle || { echo 'Run flutter build linux --release before packaging.' >&2; exit 1; }
 mkdir -p artifacts build/deb/DEBIAN build/deb/opt/periodify build/deb/usr/share/applications
 cp -a build/linux/x64/release/bundle/. build/deb/opt/periodify/
+install -Dm644 brand/icons/periodify-dark.png build/deb/usr/share/icons/hicolor/128x128/apps/com.im7ames.periodify.png
 cat > build/deb/DEBIAN/control <<EOF
 Package: periodify
 Version: ${TAG#v}
@@ -17,6 +18,8 @@ cat > build/deb/usr/share/applications/periodify.desktop <<EOF
 [Desktop Entry]
 Name=Periodify
 Exec=/opt/periodify/periodify
+Icon=com.im7ames.periodify
+StartupWMClass=com.im7ames.periodify
 Type=Application
 Categories=Education;
 Terminal=false

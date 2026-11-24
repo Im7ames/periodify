@@ -1,11 +1,11 @@
 {
-    "name": "periodify",
-    "short_name": "periodify",
+    "name": "Periodify",
+    "short_name": "Periodify",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#101915",
+    "theme_color": "#101915",
+    "description": "Save your Bromcom timetable for offline access.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

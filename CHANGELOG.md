@@ -1,3 +1,9 @@
+# Periodify 0.1.9
+
+- Add, name, and time as many periods as your school uses, with matching Bromcom labels on the timetable and watch.
+- Carry over existing bell times into the period editor and sync period settings with your account.
+- Use the Periodify logo in the app, launchers, Windows installer, and browser and installed web app icons.
+
 # Periodify 0.1.8
 
 - Sync encrypted timetable snapshots, homework, and preferences across devices with a Periodify account code.

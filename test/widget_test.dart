@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:periodify/main.dart';
+import 'package:periodify/model.dart';
 import 'package:periodify/windows_title_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -99,7 +100,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
-    expect(find.text('Bell times'), findsNothing);
+    expect(find.text('Periods'), findsNothing);
     await tester.tap(find.widgetWithText(ListTile, 'Timetable'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('No repeat'));
@@ -109,5 +110,55 @@ void main() {
     expect(find.text('Every 2 weeks'), findsOneWidget);
     final preferences = await SharedPreferences.getInstance();
     expect(preferences.getInt('repeatWeeks'), 2);
+  });
+
+  testWidgets('adds a named period and matches it to a Bromcom lesson', (
+    tester,
+  ) async {
+    final today = DateTime.now();
+    final snapshot = Snapshot(
+      lessons: [
+        Lesson(date: dayKey(today), period: 'P7', order: 0, subject: 'Science'),
+      ],
+      week: dayKey(weekStart(today)),
+      scrapedAt: today,
+    );
+    SharedPreferences.setMockInitialValues({
+      'snapshot': snapshot.encode(),
+      'bells': '{"P1":"08:30-09:00"}',
+    });
+    tester.view.physicalSize = const Size(360, 850);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(const PeriodifyApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, 'Timetable'));
+    await tester.pumpAndSettle();
+    expect(find.text('08:30–09:00 · Bromcom P1'), findsOneWidget);
+    await tester.tap(find.text('Add period'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byType(TextFormField).first,
+      'Afternoon tutorial',
+    );
+    await tester.enterText(find.byType(TextFormField).last, 'Period 7');
+    await tester.tap(find.text('Save period'));
+    await tester.pumpAndSettle();
+    expect(find.text('Afternoon tutorial'), findsOneWidget);
+    expect(find.text('09:00–10:00 · Bromcom Period 7'), findsOneWidget);
+    await tester.tap(
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text('Timetable'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final matched = find.text('Afternoon tutorial · 09:00–10:00');
+    await tester.scrollUntilVisible(matched, 150, maxScrolls: 6);
+    expect(matched, findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

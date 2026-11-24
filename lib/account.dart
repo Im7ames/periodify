@@ -7,29 +7,47 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 import 'model.dart';
+import 'periods.dart';
 
 class AccountData {
-  const AccountData(this.snapshot, this.bells, this.repeatWeeks, this.theme);
+  const AccountData(this.snapshot, this.periods, this.repeatWeeks, this.theme);
 
   final Snapshot? snapshot;
-  final Map<String, String> bells;
+  final List<SchedulePeriod> periods;
   final int repeatWeeks;
   final int theme;
 
-  String encode() => jsonEncode({
-    'schema': 1,
-    'snapshot': snapshot?.encode(),
-    'bells': {for (final key in bells.keys.toList()..sort()) key: bells[key]},
-    'repeatWeeks': repeatWeeks,
-    'theme': theme,
-  });
+  String encode() {
+    final ordered = [...periods]
+      ..sort((left, right) => left.bromcomLabel.compareTo(right.bromcomLabel));
+    // Keep the legacy payload for plain times. Older clients reject version 2
+    // instead of discarding custom names when they save another setting.
+    final hasCustomNames = ordered.any(
+      (period) => period.name != period.bromcomLabel,
+    );
+    return jsonEncode({
+      'schema': hasCustomNames ? 2 : 1,
+      'snapshot': snapshot?.encode(),
+      if (hasCustomNames)
+        'periods': ordered.map((period) => period.toJson()).toList()
+      else
+        'bells': {
+          for (final period in ordered) period.bromcomLabel: period.timeRange,
+        },
+      'repeatWeeks': repeatWeeks,
+      'theme': theme,
+    });
+  }
 
   factory AccountData.decode(String raw) {
     final document = jsonDecode(raw) as Map<String, dynamic>;
     final snapshot = document['snapshot'] as String?;
     final repeatWeeks = document['repeatWeeks'] as int;
     final theme = document['theme'] as int;
-    if (document['schema'] != 1 ||
+    final schema = document['schema'];
+    final supported =
+        schema == 1 || (schema == 2 && document['periods'] is List);
+    if (!supported ||
         repeatWeeks < 0 ||
         repeatWeeks > ScheduleRotation.maxWeeks ||
         theme < 0 ||
@@ -38,7 +56,10 @@ class AccountData {
     }
     return AccountData(
       snapshot == null ? null : Snapshot.decode(snapshot),
-      Map<String, String>.from(document['bells'] as Map),
+      SchedulePeriod.decode(
+        document['periods'],
+        legacyBells: document['bells'],
+      ),
       repeatWeeks,
       theme,
     );

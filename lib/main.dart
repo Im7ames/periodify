@@ -10,6 +10,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'account.dart';
 import 'model.dart';
+import 'period_editor.dart';
+import 'periods.dart';
 import 'portal.dart';
 import 'updates.dart';
 import 'windows_title_bar.dart';
@@ -92,6 +94,25 @@ class Home extends StatefulWidget {
   State<Home> createState() => _HomeState();
 }
 
+class _PeriodifyMark extends StatelessWidget {
+  const _PeriodifyMark({this.label});
+
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context).brightness.name;
+    return Image.asset(
+      'brand/icons/periodify-$theme.png',
+      width: 28,
+      height: 28,
+      semanticLabel: label,
+      excludeFromSemantics: label == null,
+      gaplessPlayback: true,
+    );
+  }
+}
+
 class _HomeState extends State<Home> {
   Snapshot? snapshot;
   bool loading = true, busy = false;
@@ -109,7 +130,7 @@ class _HomeState extends State<Home> {
   bool checkingUpdate = false, installingUpdate = false;
   Timer? updateTimer;
   DateTime selected = DateUtils.dateOnly(DateTime.now());
-  Map<String, String> bells = {};
+  List<SchedulePeriod> periods = [];
   String watchStatus = 'Ready when your watch is';
   static const watch = MethodChannel('com.im7ames.periodify/watch');
   bool get android =>
@@ -248,8 +269,14 @@ class _HomeState extends State<Home> {
           (savedRepeat >= 0 && savedRepeat <= ScheduleRotation.maxWeeks
               ? savedRepeat
               : 0);
-      final b = p.getString('bells');
-      if (b != null) bells = Map<String, String>.from(jsonDecode(b) as Map);
+      final savedPeriods = p.getString('periods');
+      final legacyBells = p.getString('bells');
+      periods = SchedulePeriod.decode(
+        savedPeriods == null ? null : jsonDecode(savedPeriods),
+        legacyBells: savedPeriods == null && legacyBells != null
+            ? jsonDecode(legacyBells)
+            : null,
+      );
       final t = p.getInt('theme');
       if (t != null && t >= 0 && t < 3) widget.onTheme(ThemeMode.values[t]);
     } catch (_) {
@@ -367,12 +394,21 @@ class _HomeState extends State<Home> {
     final current = snapshot;
     if (!android || current == null) return;
     try {
+      final linked = {
+        for (final label in scrapedPeriodLabels) label: ?periodFor(label),
+      };
       final data = {
         'schema': 1,
         'scrapedAt': current.scrapedAt.toUtc().toIso8601String(),
         if (current.rotation case final rotation?)
           'rotation': rotation.toJson(),
-        'bells': bells,
+        'bells': {
+          for (final entry in linked.entries) entry.key: entry.value.timeRange,
+        },
+        'periodNames': {
+          for (final entry in linked.entries)
+            if (entry.value.name != entry.key) entry.key: entry.value.name,
+        },
         'lessons': [
           for (final lesson in current.lessons)
             {
@@ -396,31 +432,85 @@ class _HomeState extends State<Home> {
     }
   }
 
-  Future<void> editBell(String period) async {
-    final start = await showTimePicker(
-      context: context,
-      initialTime: const TimeOfDay(hour: 9, minute: 0),
-      helpText: '$period start',
-    );
-    if (start == null || !mounted) return;
-    final end = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay(hour: (start.hour + 1) % 24, minute: start.minute),
-      helpText: '$period end',
-    );
-    if (end == null || !mounted) return;
-    if (end.hour * 60 + end.minute <= start.hour * 60 + start.minute) {
-      notice('End time must be after start time.');
-      return;
-    }
-    String format(TimeOfDay t) =>
-        '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-    final updated = {...bells, period: '${format(start)}-${format(end)}'};
+  List<String> get scrapedPeriodLabels =>
+      ({...?snapshot?.lessons.map((lesson) => lesson.period)}.toList()..sort());
+
+  SchedulePeriod? periodFor(String label) {
+    final exact = periods
+        .where((period) => period.bromcomLabel == label)
+        .firstOrNull;
+    final key = SchedulePeriod.matchKey(label);
+    return exact ??
+        periods
+            .where(
+              (period) => SchedulePeriod.matchKey(period.bromcomLabel) == key,
+            )
+            .firstOrNull;
+  }
+
+  Future<void> storePeriods(List<SchedulePeriod> value) async {
     final p = await SharedPreferences.getInstance();
-    await p.setString('bells', jsonEncode(updated));
-    if (mounted) setState(() => bells = updated);
+    if (!await p.setString(
+      'periods',
+      jsonEncode(value.map((period) => period.toJson()).toList()),
+    )) {
+      throw StateError('Could not save periods');
+    }
+    if (mounted) setState(() => periods = value);
     if (android) await syncWatch();
-    unawaited(syncNow());
+  }
+
+  Future<void> editPeriod({SchedulePeriod? original, String? suggested}) async {
+    if (busy || syncing) return;
+    setState(() => busy = true);
+    try {
+      final edited = await showDialog<SchedulePeriod>(
+        context: context,
+        builder: (_) => PeriodEditor(
+          period: original,
+          suggestedLabel: suggested,
+          scrapedLabels: scrapedPeriodLabels,
+          labelInUse: (label) =>
+              SchedulePeriod.matchKey(label) !=
+                  SchedulePeriod.matchKey(original?.bromcomLabel ?? '') &&
+              periodFor(label) != null,
+        ),
+      );
+      if (edited == null || !mounted) return;
+      await storePeriods([
+        for (final period in periods)
+          if (period == original) edited else period,
+        if (original == null) edited,
+      ]);
+    } catch (_) {
+      if (mounted) notice('Could not save the period.');
+    } finally {
+      if (mounted) {
+        setState(() => busy = false);
+        unawaited(syncNow());
+      }
+    }
+  }
+
+  Future<void> removePeriod(SchedulePeriod period) async {
+    if (busy || syncing) return;
+    setState(() => busy = true);
+    try {
+      final accepted = await confirmAccountAction(
+        'Remove ${period.name}?',
+        'This removes the period and its times from your schedule.',
+        'Remove',
+      );
+      if (!accepted || !mounted) return;
+      await storePeriods(periods.where((entry) => entry != period).toList());
+    } catch (_) {
+      if (mounted) notice('Could not remove the period.');
+    } finally {
+      if (mounted) {
+        setState(() => busy = false);
+        unawaited(syncNow());
+      }
+    }
   }
 
   Future<void> setTheme(ThemeMode m) async {
@@ -434,7 +524,7 @@ class _HomeState extends State<Home> {
     final p = await SharedPreferences.getInstance();
     return AccountData(
       snapshot,
-      bells,
+      periods,
       repeatWeeks,
       p.getInt('theme') ?? widget.mode.index,
     );
@@ -504,7 +594,10 @@ class _HomeState extends State<Home> {
       saved == null
           ? p.remove('snapshot')
           : p.setString('snapshot', saved.encode()),
-      p.setString('bells', jsonEncode(remote.bells)),
+      p.setString(
+        'periods',
+        jsonEncode(remote.periods.map((period) => period.toJson()).toList()),
+      ),
       p.setInt('repeatWeeks', remote.repeatWeeks),
       p.setInt('theme', remote.theme),
     ]);
@@ -515,7 +608,7 @@ class _HomeState extends State<Home> {
     widget.onTheme(ThemeMode.values[remote.theme]);
     setState(() {
       snapshot = saved;
-      bells = remote.bells;
+      periods = remote.periods;
       repeatWeeks = remote.repeatWeeks;
     });
     if (android) {
@@ -666,7 +759,7 @@ class _HomeState extends State<Home> {
         throw const AccountError('No account matches that sync code.');
       }
       if (!mounted) return;
-      if (snapshot != null || bells.isNotEmpty) {
+      if (snapshot != null || periods.isNotEmpty) {
         final approved = await confirmAccountAction(
           'Use account data?',
           'Signing in will replace the timetable, homework, and preferences saved on this device with the account copy.',
@@ -788,20 +881,7 @@ class _HomeState extends State<Home> {
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: colors.primaryContainer,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              Icons.view_timeline_rounded,
-              size: 17,
-              color: colors.onPrimaryContainer,
-              semanticLabel: showLabels ? null : 'Periodify',
-            ),
-          ),
+          _PeriodifyMark(label: showLabels ? null : 'Periodify'),
           if (showLabels) ...[
             const SizedBox(width: 9),
             const Text('Periodify'),
@@ -861,13 +941,10 @@ class _HomeState extends State<Home> {
               title: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.view_timeline_rounded,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
+                  const _PeriodifyMark(),
                   const SizedBox(width: 10),
                   const Text(
-                    'periodify',
+                    'Periodify',
                     style: TextStyle(
                       fontWeight: FontWeight.w800,
                       letterSpacing: -1,
@@ -1131,8 +1208,9 @@ class _HomeState extends State<Home> {
               style: TextStyle(fontSize: 16, height: 1.5),
             ),
           ),
-        ...lessons.map(
-          (l) => Padding(
+        ...lessons.map((l) {
+          final period = periodFor(l.period);
+          return Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: panel(
               Row(
@@ -1142,12 +1220,15 @@ class _HomeState extends State<Home> {
                     width: 50,
                     height: 50,
                     alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
                     decoration: BoxDecoration(
                       color: periodBackground(l),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Text(
                       l.period,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ),
@@ -1171,11 +1252,14 @@ class _HomeState extends State<Home> {
                           ].where((s) => s.isNotEmpty).join(' · '),
                           style: const TextStyle(fontSize: 15, height: 1.5),
                         ),
-                        if (bells[l.period] != null)
+                        if (period != null)
                           Padding(
                             padding: const EdgeInsets.only(top: 8),
                             child: Text(
-                              bells[l.period]!,
+                              [
+                                if (period.name != l.period) period.name,
+                                '${SchedulePeriod.clockTime(period.start)}–${SchedulePeriod.clockTime(period.end)}',
+                              ].join(' · '),
                               style: TextStyle(
                                 color: Theme.of(context).colorScheme.primary,
                                 fontWeight: FontWeight.w600,
@@ -1188,8 +1272,8 @@ class _HomeState extends State<Home> {
                 ],
               ),
             ),
-          ),
-        ),
+          );
+        }),
       ],
       if (snapshot?.homeworkAt != null) ...[
         const SizedBox(height: 24),
@@ -1276,7 +1360,7 @@ class _HomeState extends State<Home> {
       _SettingsPage.appearance: ('Appearance', 'Theme', Icons.palette_outlined),
       _SettingsPage.timetable: (
         'Timetable',
-        'Schedule rotation and bell times',
+        'Schedule rotation and periods',
         Icons.calendar_view_week_outlined,
       ),
       _SettingsPage.data: (
@@ -1457,34 +1541,71 @@ class _HomeState extends State<Home> {
       ),
     ),
     const SizedBox(height: 16),
-    panel(
+    periodSettings(),
+  ];
+
+  Widget periodSettings() {
+    final available = !busy && !syncing;
+    final ordered = [...periods]..sort((a, b) => a.start.compareTo(b.start));
+    final unmatched = scrapedPeriodLabels.where(
+      (label) => periodFor(label) == null,
+    );
+    return panel(
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Bell times',
+            'Periods',
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           const Text(
-            'Bromcom provides period labels. Set your school’s times for the watch’s now/next view.',
+            'Add your school’s periods. Link each one to its Bromcom label to show the name and times on your timetable and watch.',
           ),
           const SizedBox(height: 12),
-          if (snapshot == null)
-            const Text('Import a timetable to set period times.'),
-          ...{...?snapshot?.lessons.map((l) => l.period)}.map(
-            (p) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(p),
-              subtitle: Text(bells[p] ?? 'Not set'),
-              trailing: const Icon(Icons.edit_outlined),
-              onTap: () => editBell(p),
-            ),
+          FilledButton.icon(
+            onPressed: available ? () => editPeriod() : null,
+            icon: const Icon(Icons.add),
+            label: const Text('Add period'),
           ),
+          for (final period in ordered)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.schedule),
+              title: Text(period.name),
+              subtitle: Text(
+                '${SchedulePeriod.clockTime(period.start)}–${SchedulePeriod.clockTime(period.end)} · Bromcom ${period.bromcomLabel}',
+              ),
+              onTap: available ? () => editPeriod(original: period) : null,
+              trailing: IconButton(
+                tooltip: 'Remove ${period.name}',
+                icon: const Icon(Icons.delete_outline),
+                onPressed: available ? () => removePeriod(period) : null,
+              ),
+            ),
+          if (unmatched.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Text('Labels from your timetable'),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final label in unmatched)
+                  ActionChip(
+                    avatar: const Icon(Icons.add, size: 16),
+                    label: Text(label),
+                    onPressed: available
+                        ? () => editPeriod(suggested: label)
+                        : null,
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
-    ),
-  ];
+    );
+  }
 
   List<Widget> dataSettings() => [
     panel(

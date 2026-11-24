@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="periodify_icon_background">#323232</color>
+    <color name="periodify_launch_background">#F3F7F4</color>
+</resources>

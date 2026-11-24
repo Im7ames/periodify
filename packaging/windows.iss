@@ -6,6 +6,7 @@ DefaultDirName={localappdata}\Programs\Periodify
 PrivilegesRequired=lowest
 OutputDir=..\artifacts
 OutputBaseFilename={#InstallerBasename}
+SetupIconFile=..\windows\runner\resources\app_icon.ico
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
