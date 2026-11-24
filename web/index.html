@@ -26,8 +26,19 @@
   <meta name="apple-mobile-web-app-title" content="periodify">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link id="favicon" rel="icon" type="image/svg+xml" sizes="any" href="favicon-light.svg">
+  <script>
+    (() => {
+      const favicon = document.getElementById('favicon');
+      const darkMode = window.matchMedia('(prefers-color-scheme: dark)');
+      const updateFavicon = () => {
+        favicon.href = darkMode.matches ? 'favicon-dark.svg' : 'favicon-light.svg';
+      };
+
+      updateFavicon();
+      darkMode.addEventListener('change', updateFavicon);
+    })();
+  </script>
 
   <title>Periodify</title>
   <link rel="manifest" href="manifest.json">
