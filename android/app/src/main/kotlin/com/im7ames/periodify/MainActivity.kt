@@ -7,12 +7,28 @@ import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 import android.content.Intent
 import android.app.Activity
+import java.io.File
 
 class MainActivity : FlutterActivity() {
     private var exportResult: MethodChannel.Result? = null
     private var exportPayload: String? = null
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.im7ames.periodify/update")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "cacheDirectory") {
+                    result.success(cacheDir.path)
+                } else if (call.method != "install") {
+                    result.notImplemented()
+                } else {
+                    try {
+                        if (UpdateInstaller.offer(this, File(call.arguments as String))) result.success(null)
+                        else result.error("INSTALL_PERMISSION", "Android requires installation permission", null)
+                    } catch (_: Exception) {
+                        result.error("INSTALL", "Android could not open this update", null)
+                    }
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.im7ames.periodify/watch")
             .setMethodCallHandler { call, result ->
                 if (call.method == "export") {

@@ -88,7 +88,24 @@ class _PortalPageState extends State<PortalPage> {
         if (!table || !select || document.querySelector('#loading')?.offsetParent) return '';
         const copy = select.cloneNode(true);
         [...copy.options].forEach(o => {o.removeAttribute('selected'); if(o.value === select.value) o.setAttribute('selected', 'selected');});
-        return table.outerHTML + copy.outerHTML;
+        const schedule = table.cloneNode(true);
+        const copiedCells = schedule.querySelectorAll('tbody td');
+        const accent = color => {
+          const match = /^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([.\d]+))?\)$/.exec(color);
+          if (!match || (match[4] && Number(match[4]) < 0.2)) return null;
+          const channels = match.slice(1, 4).map(Number);
+          if (Math.max(...channels) - Math.min(...channels) < 18) return null;
+          return '#' + channels.map(n => n.toString(16).padStart(2, '0')).join('');
+        };
+        table.querySelectorAll('tbody td').forEach((cell, index) => {
+          const subject = cell.querySelector('.sp-text');
+          if (!subject) return;
+          const nodes = [cell, ...cell.querySelectorAll('*')];
+          const backgrounds = nodes.map(el => accent(getComputedStyle(el).backgroundColor));
+          const color = backgrounds.find(Boolean) || accent(getComputedStyle(subject).color);
+          if (color) copiedCells[index].dataset.periodifyColor = color;
+        });
+        return schedule.outerHTML + copy.outerHTML;
       })()''',
       );
       final result = parseTimetable(source as String? ?? '');

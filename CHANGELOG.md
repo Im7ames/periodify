@@ -1,3 +1,9 @@
+# Periodify 0.1.8
+
+- Sync encrypted timetable snapshots, homework, and preferences across devices with a Periodify account code.
+- Check for updates in the app and hand verified downloads to the platform installer. Restart directly on Windows and reload on the web.
+- Capture Bromcom lesson colours and use softer accents in light mode, dark mode, and on Wear OS.
+
 # Periodify 0.1.7
 
 - Configure a repeating timetable and capture its teaching weeks in one guided Bromcom session.

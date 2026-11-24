@@ -44,9 +44,11 @@ class Lesson {
     this.room = '',
     this.teacher = '',
     this.group = '',
+    this.color,
     required this.order,
   });
   final String date, period, subject, room, teacher, group;
+  final String? color;
   final int order;
   Map<String, dynamic> toJson() => {
     'date': date,
@@ -55,6 +57,7 @@ class Lesson {
     'room': room,
     'teacher': teacher,
     'group': group,
+    if (color != null) 'color': color,
     'order': order,
   };
   factory Lesson.fromJson(Map<String, dynamic> j) => Lesson(
@@ -64,8 +67,15 @@ class Lesson {
     room: j['room'] as String? ?? '',
     teacher: j['teacher'] as String? ?? '',
     group: j['group'] as String? ?? '',
+    color: _lessonColor(j['color'] as String?),
     order: j['order'] as int,
   );
+}
+
+String? _lessonColor(String? value) {
+  if (value == null) return null;
+  final normalized = value.toLowerCase().trim();
+  return RegExp(r'^#[0-9a-f]{6}$').hasMatch(normalized) ? normalized : null;
 }
 
 class Snapshot {
@@ -320,6 +330,7 @@ Snapshot parseTimetable(String source, {DateTime? scrapedAt}) {
           room: room,
           teacher: teacher,
           group: group,
+          color: _lessonColor(cell.attributes['data-periodify-color']),
           order: r,
         ),
       );

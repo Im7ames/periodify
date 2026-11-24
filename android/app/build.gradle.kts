@@ -9,6 +9,10 @@ android {
     namespace = "com.im7ames.periodify"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
+    sourceSets.getByName("main").apply {
+        java.srcDir(rootProject.file("shared/kotlin"))
+        res.srcDir(rootProject.file("shared/res"))
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -45,7 +49,10 @@ android {
     }
 }
 
-dependencies { implementation("com.google.android.gms:play-services-wearable:20.0.1") }
+dependencies {
+    implementation("com.google.android.gms:play-services-wearable:20.0.1")
+    implementation("androidx.core:core:1.17.0")
+}
 
 kotlin {
     compilerOptions {

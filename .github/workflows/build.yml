@@ -23,6 +23,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test cloud/sync/worker.test.mjs
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.2'
@@ -140,7 +144,7 @@ jobs:
           cache: true
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libsecret-1-dev
       - run: flutter pub get
       - name: Compile Windows app
         if: runner.os == 'Windows'

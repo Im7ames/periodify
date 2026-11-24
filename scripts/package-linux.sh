@@ -10,7 +10,7 @@ Package: periodify
 Version: ${TAG#v}
 Architecture: amd64
 Maintainer: Periodify <noreply@github.com>
-Depends: libgtk-3-0, libstdc++6
+Depends: libgtk-3-0, libstdc++6, libsecret-1-0
 Description: Offline Bromcom timetable companion
 EOF
 cat > build/deb/usr/share/applications/periodify.desktop <<EOF

@@ -41,6 +41,17 @@ void main() {
     expect(Snapshot.decode(result.encode()).lessons.single.period, 'P1');
     expect(() => Snapshot.decode('{"schema":2}'), throwsFormatException);
   });
+  test('Bromcom lesson colours survive snapshot export', () {
+    final rendered = fixture().replaceFirst(
+      '<td>',
+      '<td data-periodify-color="#7DB4D9">',
+    );
+    final lesson = Snapshot.decode(parseTimetable(rendered).encode())
+        .lessons
+        .single;
+    expect(lesson.color, '#7db4d9');
+    expect(parseTimetable(fixture()).lessons.single.color, isNull);
+  });
   test('rotations keep exact dates and repeat the selected teaching weeks', () {
     final weekA = parseTimetable(fixture());
     final weekB = parseTimetable(

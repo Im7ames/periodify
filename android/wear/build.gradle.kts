@@ -2,6 +2,10 @@ plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
 android {
     namespace = "com.im7ames.periodify"
     compileSdk = 36
+    sourceSets.getByName("main").apply {
+        java.srcDir(rootProject.file("shared/kotlin"))
+        res.srcDir(rootProject.file("shared/res"))
+    }
     defaultConfig {
         applicationId = "com.im7ames.periodify"
         minSdk = 30
@@ -24,7 +28,10 @@ android {
     }
     buildTypes { release { signingConfig = signingConfigs.getByName("release") } }
 }
-dependencies { implementation("com.google.android.gms:play-services-wearable:20.0.1") }
+dependencies {
+    implementation("com.google.android.gms:play-services-wearable:20.0.1")
+    implementation("androidx.core:core:1.17.0")
+}
 
 kotlin {
     compilerOptions {

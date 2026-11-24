@@ -17,3 +17,17 @@ Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignore
 Name: "{autoprograms}\Periodify"; Filename: "{app}\periodify.exe"
 [Run]
 Filename: "{app}\periodify.exe"; Description: "Open Periodify"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\periodify.exe"; Flags: nowait skipifnotsilent; Check: IsPeriodifyUpdate
+[Code]
+function IsPeriodifyUpdate: Boolean;
+var
+  Index: Integer;
+begin
+  Result := False;
+  for Index := 1 to ParamCount do
+    if CompareText(ParamStr(Index), '/PERIODIFYUPDATE') = 0 then
+    begin
+      Result := True;
+      Exit;
+    end;
+end;

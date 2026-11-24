@@ -18,7 +18,13 @@ The information and downloads page ships at `/landing/` alongside the Flutter we
 
 ## Privacy
 
-Timetables and homework are stored in application preferences on your device (browser local storage on web). They are not uploaded to Cloudflare, GitHub or an analytics service. JSON exports contain private timetable data. Microsoft credentials are entered on Microsoft's page inside the portal browser; extraction runs only on the exact Bromcom HTTPS timetable/homework URLs and captures only the relevant rendered tables. Android backups are disabled. Portal cookies may persist in the platform WebView.
+By default timetables and homework stay in application preferences on your device. **Settings → Account** lets you opt in to encrypted sync. Enter the generated sync code on each device you want to connect. Keep a private copy of the code, since it unlocks your account. The Cloudflare Worker stores encrypted snapshots and settings. The code itself and your Microsoft or Bromcom credentials stay on your devices. You can delete the cloud copy from the Account page.
+
+JSON exports contain private timetable data. Microsoft credentials are entered on Microsoft's page inside the portal browser. Extraction reads the rendered timetable and homework tables only when you press Scrape. Android backups are disabled. Portal cookies may persist in the platform WebView.
+
+## Updates
+
+Periodify checks for updates and offers an action when a newer release is ready. Windows can restart into the new version and web can reload once the host serves a new build. Android and Wear OS use the device's installer and permissions. Linux can install with administrator approval and restart. macOS opens the verified disk image for installation.
 
 ## Develop
 
