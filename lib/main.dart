@@ -9,11 +9,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'model.dart';
 import 'portal.dart';
+import 'windows_title_bar.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (usesWindowsTitleBar) await configureWindowsTitleBar();
   runApp(const PeriodifyApp());
 }
+
+const _destinations = [
+  (label: 'Timetable', icon: Icons.calendar_view_day_outlined),
+  (label: 'Watch', icon: Icons.watch_outlined),
+  (label: 'Settings', icon: Icons.tune),
+];
 
 class PeriodifyApp extends StatefulWidget {
   const PeriodifyApp({super.key});
@@ -250,85 +258,152 @@ class _HomeState extends State<Home> {
     await p.setInt('theme', m.index);
   }
 
+  void selectPage(int index) => setState(() => page = index);
+
+  PreferredSizeWidget windowsTitleBar(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final showLabels = media.size.width >= 400 + media.textScaler.scale(250);
+    final colors = Theme.of(context).colorScheme;
+
+    return WindowsTitleBar(
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: colors.primaryContainer,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              Icons.view_timeline_rounded,
+              size: 17,
+              color: colors.onPrimaryContainer,
+              semanticLabel: showLabels ? null : 'Periodify',
+            ),
+          ),
+          if (showLabels) ...[
+            const SizedBox(width: 9),
+            const Text('Periodify'),
+          ],
+        ],
+      ),
+      navigation: Row(
+        mainAxisSize: MainAxisSize.min,
+        spacing: 4,
+        children: [
+          for (final (index, destination) in _destinations.indexed)
+            Tooltip(
+              message: showLabels ? '' : destination.label,
+              child: Semantics(
+                selected: page == index,
+                child: TextButton(
+                  onPressed: () => selectPage(index),
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(40, 36),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: showLabels ? 12 : 8,
+                    ),
+                    foregroundColor: page == index
+                        ? colors.onSecondaryContainer
+                        : colors.onSurfaceVariant,
+                    backgroundColor: page == index
+                        ? colors.secondaryContainer
+                        : null,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    spacing: 7,
+                    children: [
+                      Icon(destination.icon, size: 18),
+                      if (showLabels) Text(destination.label),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 850;
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.view_timeline_rounded,
-              color: Theme.of(context).colorScheme.primary,
+      appBar: usesWindowsTitleBar
+          ? windowsTitleBar(context)
+          : AppBar(
+              title: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.view_timeline_rounded,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'periodify',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -1,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                IconButton(
+                  tooltip: 'Change theme',
+                  onPressed: () => setTheme(
+                    widget.mode == ThemeMode.dark
+                        ? ThemeMode.light
+                        : ThemeMode.dark,
+                  ),
+                  icon: Icon(
+                    widget.mode == ThemeMode.dark
+                        ? Icons.light_mode_outlined
+                        : Icons.dark_mode_outlined,
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
             ),
-            const SizedBox(width: 10),
-            const Text(
-              'periodify',
-              style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: -1),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Change theme',
-            onPressed: () => setTheme(
-              widget.mode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark,
-            ),
-            icon: Icon(
-              widget.mode == ThemeMode.dark
-                  ? Icons.light_mode_outlined
-                  : Icons.dark_mode_outlined,
-            ),
-          ),
-          const SizedBox(width: 12),
-        ],
-      ),
-      bottomNavigationBar: wide
+      bottomNavigationBar: wide || usesWindowsTitleBar
           ? null
           : NavigationBar(
               selectedIndex: page,
-              onDestinationSelected: (i) => setState(() => page = i),
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.calendar_view_day_outlined),
-                  label: 'Timetable',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.watch_outlined),
-                  label: 'Watch',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.tune),
-                  label: 'Settings',
-                ),
+              onDestinationSelected: selectPage,
+              destinations: [
+                for (final destination in _destinations)
+                  NavigationDestination(
+                    icon: Icon(destination.icon),
+                    label: destination.label,
+                  ),
               ],
             ),
       body: SafeArea(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (wide)
+            if (wide && !usesWindowsTitleBar)
               Padding(
                 padding: const EdgeInsets.only(top: 24),
                 child: NavigationRail(
                   backgroundColor: Colors.transparent,
                   selectedIndex: page,
-                  onDestinationSelected: (i) => setState(() => page = i),
+                  onDestinationSelected: selectPage,
                   labelType: NavigationRailLabelType.all,
-                  destinations: const [
-                    NavigationRailDestination(
-                      icon: Icon(Icons.calendar_view_day_outlined),
-                      label: Text('Timetable'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.watch_outlined),
-                      label: Text('Watch'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.tune),
-                      label: Text('Settings'),
-                    ),
+                  destinations: [
+                    for (final destination in _destinations)
+                      NavigationRailDestination(
+                        icon: Icon(destination.icon),
+                        label: Text(destination.label),
+                      ),
                   ],
                 ),
               ),
@@ -388,11 +463,12 @@ class _HomeState extends State<Home> {
         <Lesson>[];
     final week = selected.subtract(Duration(days: selected.weekday - 1));
     return [
-      ...heading(
-        'Your day, a little clearer',
-        'A place for every period.',
-        'Your timetable, saved for the moments you need it.',
+      Text(
+        'Timetable',
+        style: Theme.of(context).textTheme.headlineLarge
+            ?.copyWith(fontWeight: FontWeight.w700),
       ),
+      const SizedBox(height: 20),
       Wrap(
         spacing: 12,
         runSpacing: 12,
@@ -404,6 +480,10 @@ class _HomeState extends State<Home> {
           ),
           OutlinedButton.icon(
             onPressed: busy ? null : importData,
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(48, 52),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            ),
             icon: const Icon(Icons.file_open_outlined),
             label: const Text('Import snapshot'),
           ),
@@ -414,27 +494,23 @@ class _HomeState extends State<Home> {
         panel(
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Icon(Icons.auto_stories_outlined, size: 46),
-              SizedBox(height: 24),
-              Text(
-                'Make room for your day.',
+            children: [
+              Icon(
+                Icons.calendar_view_day_outlined,
+                size: 32,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'No timetable saved',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
               ),
-              SizedBox(height: 12),
+              const SizedBox(height: 8),
               Text(
-                'Connect to Bromcom, sign in with Microsoft, then scrape your selected week. Nothing updates until you choose.',
-                style: TextStyle(fontSize: 16, height: 1.6),
-              ),
-              SizedBox(height: 24),
-              Wrap(
-                spacing: 16,
-                runSpacing: 8,
-                children: [
-                  Chip(label: Text('Manual refresh')),
-                  Chip(label: Text('Offline access')),
-                  Chip(label: Text('Watch ready')),
-                ],
+                nativePortal
+                    ? 'Sign in to Bromcom with Microsoft and scrape the week you want to save, or import a snapshot.'
+                    : 'Import a snapshot exported from Periodify on Android, Windows, or macOS.',
+                style: const TextStyle(fontSize: 16, height: 1.6),
               ),
             ],
           ),
@@ -597,10 +673,7 @@ class _HomeState extends State<Home> {
         ),
       ],
       const SizedBox(height: 32),
-      const Text(
-        'Independent of Bromcom. Built around your day.',
-        style: TextStyle(fontSize: 13),
-      ),
+      const Text('Independent of Bromcom.', style: TextStyle(fontSize: 13)),
     ];
   }
 

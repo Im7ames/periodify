@@ -1,3 +1,8 @@
+# Periodify 0.1.6
+
+- Integrate Timetable, Watch, and Settings into a custom Windows title bar with window controls.
+- Use the new squircle browser favicon and switch between light and dark artwork as the system theme changes.
+
 # Periodify 0.1.5
 
 - Publish an unsigned Windows installer and an unnotarized macOS disk image as labelled previews.

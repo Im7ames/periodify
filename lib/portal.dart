@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import 'model.dart';
+import 'windows_title_bar.dart';
 
 class PortalPage extends StatefulWidget {
   const PortalPage({super.key, this.previous});
@@ -104,71 +105,78 @@ class _PortalPageState extends State<PortalPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Bromcom'),
-      actions: [
-        PopupMenuButton<String>(
-          tooltip: 'Portal section',
-          onSelected: (path) => controller?.loadUrl(
-            urlRequest: URLRequest(
-              url: WebUri('https://www.bromcomvle.com/$path'),
-            ),
+  Widget build(BuildContext context) {
+    final actions = <Widget>[
+      PopupMenuButton<String>(
+        tooltip: 'Portal section',
+        onSelected: (path) => controller?.loadUrl(
+          urlRequest: URLRequest(
+            url: WebUri('https://www.bromcomvle.com/$path'),
           ),
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'Timetable', child: Text('Timetable')),
-            PopupMenuItem(value: 'Homework', child: Text('Homework')),
-          ],
         ),
-      ],
-    ),
-    body: SafeArea(
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              error ?? 'Sign in using Bromcom’s Microsoft button. Select a week in My Timetable, then press Scrape. Your password stays in the sign-in page.',
-            ),
-          ),
-          if (progress < 1) LinearProgressIndicator(value: progress),
-          Expanded(
-            child: InAppWebView(
-              initialUrlRequest: URLRequest(
-                url: WebUri('https://www.bromcomvle.com/'),
+        itemBuilder: (_) => const [
+          PopupMenuItem(value: 'Timetable', child: Text('Timetable')),
+          PopupMenuItem(value: 'Homework', child: Text('Homework')),
+        ],
+      ),
+    ];
+    const title = Text('Bromcom', maxLines: 1, overflow: TextOverflow.ellipsis);
+    return Scaffold(
+      appBar: usesWindowsTitleBar
+          ? WindowsTitleBar(
+              title: title,
+              leading: const BackButton(),
+              actions: actions,
+            )
+          : AppBar(title: title, actions: actions),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                error ?? 'Sign in using Bromcom’s Microsoft button. Select a week in My Timetable, then press Scrape. Your password stays in the sign-in page.',
               ),
-              initialSettings: InAppWebViewSettings(
-                javaScriptEnabled: true,
-                useShouldOverrideUrlLoading: true,
-                supportMultipleWindows: false,
-              ),
-              onWebViewCreated: (c) => controller = c,
-              onProgressChanged: (_, value) {
-                if (mounted) setState(() => progress = value / 100);
-              },
-              shouldOverrideUrlLoading: (_, action) async =>
-                  action.request.url?.scheme == 'https'
-                  ? NavigationActionPolicy.ALLOW
-                  : NavigationActionPolicy.CANCEL,
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: busy ? null : scrape,
-                icon: const Icon(Icons.download_rounded),
-                label: Text(
-                  busy
-                      ? 'Reading portal…'
-                      : 'Scrape visible timetable or homework',
+            if (progress < 1) LinearProgressIndicator(value: progress),
+            Expanded(
+              child: InAppWebView(
+                initialUrlRequest: URLRequest(
+                  url: WebUri('https://www.bromcomvle.com/'),
+                ),
+                initialSettings: InAppWebViewSettings(
+                  javaScriptEnabled: true,
+                  useShouldOverrideUrlLoading: true,
+                  supportMultipleWindows: false,
+                ),
+                onWebViewCreated: (c) => controller = c,
+                onProgressChanged: (_, value) {
+                  if (mounted) setState(() => progress = value / 100);
+                },
+                shouldOverrideUrlLoading: (_, action) async =>
+                    action.request.url?.scheme == 'https'
+                    ? NavigationActionPolicy.ALLOW
+                    : NavigationActionPolicy.CANCEL,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: busy ? null : scrape,
+                  icon: const Icon(Icons.download_rounded),
+                  label: Text(
+                    busy
+                        ? 'Reading portal…'
+                        : 'Scrape visible timetable or homework',
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
