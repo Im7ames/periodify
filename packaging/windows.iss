@@ -1,7 +1,10 @@
 [Setup]
 AppId={{9EDAC514-B395-4D77-BB63-70B7844FE94F}
 AppName=Periodify
+AppVerName=Periodify
 AppVersion={#AppVersion}
+VersionInfoVersion={#AppVersion}
+VersionInfoTextVersion={#AppVersion}
 DefaultDirName={localappdata}\Programs\Periodify
 PrivilegesRequired=lowest
 OutputDir=..\artifacts

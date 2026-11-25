@@ -1,3 +1,7 @@
+# Periodify 0.1.10
+
+- Display Periodify as the app name on desktop and in Windows Settings. Keep the version in the installer, app, and update metadata.
+
 # Periodify 0.1.9
 
 - Add, name, and time as many periods as your school uses, with matching Bromcom labels on the timetable and watch.
