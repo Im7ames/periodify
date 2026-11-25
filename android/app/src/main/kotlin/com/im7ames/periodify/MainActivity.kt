@@ -12,8 +12,24 @@ import java.io.File
 class MainActivity : FlutterActivity() {
     private var exportResult: MethodChannel.Result? = null
     private var exportPayload: String? = null
+    private var timetableWidget: MethodChannel? = null
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        timetableWidget = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger, "com.im7ames.periodify/timetableWidget",
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                val payload = call.arguments as? String
+                when {
+                    call.method != "save" -> result.notImplemented()
+                    payload == null -> result.error("PAYLOAD", "Invalid widget timetable", null)
+                    else -> {
+                        TimetableWidgets.save(this, payload)
+                        result.success(null)
+                    }
+                }
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.im7ames.periodify/update")
             .setMethodCallHandler { call, result ->
                 if (call.method == "cacheDirectory") {
@@ -49,6 +65,7 @@ class MainActivity : FlutterActivity() {
                     result.notImplemented()
                 } else {
                     val payload = if (call.method == "clear") "" else call.arguments as? String
+                    if (payload != null) TimetableWidgets.save(this, payload)
                     if (payload == null || payload.toByteArray().size > 90000) {
                         result.error("PAYLOAD", "Timetable exceeds watch transfer limit", null)
                     } else {
@@ -63,6 +80,20 @@ class MainActivity : FlutterActivity() {
                 }
             }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.action == TimetableWidgets.openAction) {
+            timetableWidget?.invokeMethod("openToday", null)
+        }
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        timetableWidget?.setMethodCallHandler(null)
+        timetableWidget = null
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
+
     @Deprecated("Activity result API used for Flutter host compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)

@@ -1,3 +1,9 @@
+# Periodify 0.1.11
+
+- Jump to today's timetable from any displayed week.
+- Choose Cards, Compact, Timeline, Grid, Week or Focus in Appearance settings, with a preview for each.
+- Add resizable Today’s timetable and Next lesson widgets to the Android home screen. They use the saved schedule and follow Android's wallpaper colours on Android 12 and later.
+
 # Periodify 0.1.10
 
 - Display Periodify as the app name on desktop and in Windows Settings. Keep the version in the installer, app, and update metadata.

@@ -13,6 +13,7 @@ import 'model.dart';
 import 'period_editor.dart';
 import 'periods.dart';
 import 'portal.dart';
+import 'timetable_layout.dart';
 import 'updates.dart';
 import 'windows_title_bar.dart';
 
@@ -130,9 +131,15 @@ class _HomeState extends State<Home> {
   bool checkingUpdate = false, installingUpdate = false;
   Timer? updateTimer;
   DateTime selected = DateUtils.dateOnly(DateTime.now());
+  final scroll = ScrollController();
+  TimetableLayout timetableLayout = TimetableLayout.cards;
+  Timer? layoutClock;
   List<SchedulePeriod> periods = [];
   String watchStatus = 'Ready when your watch is';
   static const watch = MethodChannel('com.im7ames.periodify/watch');
+  static const timetableWidget = MethodChannel(
+    'com.im7ames.periodify/timetableWidget',
+  );
   bool get android =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
   bool get nativePortal =>
@@ -145,6 +152,14 @@ class _HomeState extends State<Home> {
   @override
   void initState() {
     super.initState();
+    if (android) {
+      timetableWidget.setMethodCallHandler((call) async {
+        if (call.method == 'openToday' && mounted) {
+          goToToday();
+          if (scroll.hasClients) scroll.jumpTo(0);
+        }
+      });
+    }
     unawaited(restore().then((_) => restoreAccount()));
     if (widget.autoUpdateChecks) {
       unawaited(checkUpdate());
@@ -157,8 +172,11 @@ class _HomeState extends State<Home> {
 
   @override
   void dispose() {
+    if (android) timetableWidget.setMethodCallHandler(null);
     accountTimer?.cancel();
     updateTimer?.cancel();
+    layoutClock?.cancel();
+    scroll.dispose();
     super.dispose();
   }
 
@@ -261,9 +279,14 @@ class _HomeState extends State<Home> {
   Future<void> restore() async {
     try {
       final p = await SharedPreferences.getInstance();
+      if (!mounted) return;
       final raw = p.getString('snapshot');
       if (raw != null) snapshot = Snapshot.decode(raw);
       final savedRepeat = p.getInt('repeatWeeks') ?? 0;
+      timetableLayout = TimetableLayout.fromName(
+        p.getString('timetableLayout'),
+      );
+      refreshFocusClock();
       repeatWeeks =
           snapshot?.rotation?.weeks ??
           (savedRepeat >= 0 && savedRepeat <= ScheduleRotation.maxWeeks
@@ -284,6 +307,7 @@ class _HomeState extends State<Home> {
         notice('Could not read saved data. Import or scrape a new snapshot.');
       }
     }
+    if (mounted && android) unawaited(restoreAndroidWidgets());
     if (mounted) setState(() => loading = false);
   }
 
@@ -390,37 +414,53 @@ class _HomeState extends State<Home> {
     }
   }
 
+  String androidSchedulePayload(Snapshot current) {
+    final linked = {
+      for (final label in scrapedPeriodLabels) label: ?periodFor(label),
+    };
+    return jsonEncode({
+      'schema': 1,
+      'scrapedAt': current.scrapedAt.toUtc().toIso8601String(),
+      if (current.rotation case final rotation?) 'rotation': rotation.toJson(),
+      'bells': {
+        for (final entry in linked.entries) entry.key: entry.value.timeRange,
+      },
+      'periodNames': {
+        for (final entry in linked.entries)
+          if (entry.value.name != entry.key) entry.key: entry.value.name,
+      },
+      'lessons': [
+        for (final lesson in current.lessons)
+          {
+            'date': lesson.date,
+            'period': lesson.period,
+            'subject': lesson.subject,
+            'room': lesson.room,
+            'color': ?lesson.color,
+          },
+      ],
+    });
+  }
+
+  Future<void> restoreAndroidWidgets() async {
+    final current = snapshot;
+    try {
+      await timetableWidget.invokeMethod<void>(
+        'save',
+        current == null ? '' : androidSchedulePayload(current),
+      );
+    } on PlatformException catch (error) {
+      debugPrint('Could not refresh timetable widgets: ${error.code}');
+    } on MissingPluginException {
+      // A Flutter development build may still have the previous Android host.
+    }
+  }
+
   Future<void> syncWatch() async {
     final current = snapshot;
     if (!android || current == null) return;
     try {
-      final linked = {
-        for (final label in scrapedPeriodLabels) label: ?periodFor(label),
-      };
-      final data = {
-        'schema': 1,
-        'scrapedAt': current.scrapedAt.toUtc().toIso8601String(),
-        if (current.rotation case final rotation?)
-          'rotation': rotation.toJson(),
-        'bells': {
-          for (final entry in linked.entries) entry.key: entry.value.timeRange,
-        },
-        'periodNames': {
-          for (final entry in linked.entries)
-            if (entry.value.name != entry.key) entry.key: entry.value.name,
-        },
-        'lessons': [
-          for (final lesson in current.lessons)
-            {
-              'date': lesson.date,
-              'period': lesson.period,
-              'subject': lesson.subject,
-              'room': lesson.room,
-              'color': ?lesson.color,
-            },
-        ],
-      };
-      await watch.invokeMethod<void>('sync', jsonEncode(data));
+      await watch.invokeMethod<void>('sync', androidSchedulePayload(current));
       if (mounted) setState(() => watchStatus = 'Queued for your paired watch');
     } catch (_) {
       if (mounted) {
@@ -872,6 +912,29 @@ class _HomeState extends State<Home> {
     settingsPage = null;
   });
 
+  void goToToday() => setState(() {
+    page = 0;
+    settingsPage = null;
+    selected = DateUtils.dateOnly(DateTime.now());
+  });
+
+  void refreshFocusClock() {
+    layoutClock?.cancel();
+    if (timetableLayout == TimetableLayout.focus) {
+      layoutClock = Timer.periodic(const Duration(minutes: 1), (_) {
+        if (mounted && page == 0) setState(() {});
+      });
+    }
+  }
+
+  Future<void> setTimetableLayout(TimetableLayout layout) async {
+    if (timetableLayout == layout) return;
+    setState(() => timetableLayout = layout);
+    refreshFocusClock();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('timetableLayout', layout.name);
+  }
+
   PreferredSizeWidget windowsTitleBar(BuildContext context) {
     final media = MediaQuery.of(context);
     final showLabels = media.size.width >= 400 + media.textScaler.scale(250);
@@ -1011,6 +1074,7 @@ class _HomeState extends State<Home> {
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 1060),
                         child: ListView(
+                          controller: scroll,
                           padding: EdgeInsets.all(wide ? 36 : 20),
                           children: [
                             if (availableUpdate != null &&
@@ -1061,18 +1125,6 @@ class _HomeState extends State<Home> {
   Widget panel(Widget child) => Card(
     child: Padding(padding: const EdgeInsets.all(24), child: child),
   );
-
-  Color periodBackground(Lesson lesson) {
-    final colors = Theme.of(context).colorScheme;
-    final hex = lesson.color;
-    if (hex == null) return colors.primaryContainer;
-    final color = Color(0xff000000 | int.parse(hex.substring(1), radix: 16));
-    final opacity = colors.brightness == Brightness.dark ? 0.27 : 0.22;
-    return Color.alphaBlend(
-      color.withValues(alpha: opacity),
-      colors.surfaceContainerHigh,
-    );
-  }
 
   List<Widget> timetable() {
     final current = snapshot;
@@ -1142,7 +1194,16 @@ class _HomeState extends State<Home> {
             '${ScheduleRotation.label(rotation.indexFor(selected))} of rotation${current!.hasWeek(selected) ? '' : ' · Repeating timetable'}',
           ),
         ],
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: goToToday,
+            icon: const Icon(Icons.today_outlined),
+            label: const Text('Today'),
+          ),
+        ),
+        const SizedBox(height: 8),
         Row(
           children: [
             IconButton(
@@ -1180,21 +1241,36 @@ class _HomeState extends State<Home> {
           ],
         ),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: List.generate(7, (i) {
-            final d = week.add(Duration(days: i));
-            return ChoiceChip(
-              selected: dayKey(d) == dayKey(selected),
-              onSelected: (_) => setState(() => selected = d),
-              label: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text('${DateFormat('E').format(d)} ${d.day}'),
-              ),
-            );
-          }),
-        ),
+        if (timetableLayout == TimetableLayout.week)
+          TimetableWeek(
+            days: [
+              for (var offset = 0; offset < 7; offset++)
+                (
+                  date: week.add(Duration(days: offset)),
+                  lessons: current!.lessonsFor(
+                    week.add(Duration(days: offset)),
+                  ),
+                ),
+            ],
+            selected: selected,
+            onSelect: (date) => setState(() => selected = date),
+          )
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: List.generate(7, (i) {
+              final d = week.add(Duration(days: i));
+              return ChoiceChip(
+                selected: dayKey(d) == dayKey(selected),
+                onSelected: (_) => setState(() => selected = d),
+                label: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text('${DateFormat('E').format(d)} ${d.day}'),
+                ),
+              );
+            }),
+          ),
         const SizedBox(height: 24),
         Text(
           DateFormat('EEEE, d MMMM').format(selected),
@@ -1208,72 +1284,12 @@ class _HomeState extends State<Home> {
               style: TextStyle(fontSize: 16, height: 1.5),
             ),
           ),
-        ...lessons.map((l) {
-          final period = periodFor(l.period);
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: panel(
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 50,
-                    height: 50,
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    decoration: BoxDecoration(
-                      color: periodBackground(l),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      l.period,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l.subject,
-                          style: const TextStyle(
-                            fontSize: 21,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          [
-                            l.room,
-                            l.teacher,
-                          ].where((s) => s.isNotEmpty).join(' · '),
-                          style: const TextStyle(fontSize: 15, height: 1.5),
-                        ),
-                        if (period != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text(
-                              [
-                                if (period.name != l.period) period.name,
-                                '${SchedulePeriod.clockTime(period.start)}–${SchedulePeriod.clockTime(period.end)}',
-                              ].join(' · '),
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.primary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }),
+        TimetableLessons(
+          layout: timetableLayout,
+          lessons: lessons,
+          date: selected,
+          periodFor: periodFor,
+        ),
       ],
       if (snapshot?.homeworkAt != null) ...[
         const SizedBox(height: 24),
@@ -1357,7 +1373,11 @@ class _HomeState extends State<Home> {
   ];
   List<Widget> settings() {
     final pages = <_SettingsPage, (String, String, IconData)>{
-      _SettingsPage.appearance: ('Appearance', 'Theme', Icons.palette_outlined),
+      _SettingsPage.appearance: (
+        'Appearance',
+        'Theme and timetable layout',
+        Icons.palette_outlined,
+      ),
       _SettingsPage.timetable: (
         'Timetable',
         'Schedule rotation and periods',
@@ -1426,6 +1446,16 @@ class _HomeState extends State<Home> {
                   ),
               ],
             ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Timetable layout',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 12),
+          TimetableLayoutPicker(
+            selected: timetableLayout,
+            onChanged: setTimetableLayout,
           ),
         ],
         _SettingsPage.timetable => timetableSettings(),

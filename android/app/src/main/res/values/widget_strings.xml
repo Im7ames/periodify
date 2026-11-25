@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_today">Today’s timetable</string>
+    <string name="widget_next">Next lesson</string>
+    <string name="widget_in_progress">In progress</string>
+    <string name="widget_today_lessons">Today’s lessons</string>
+    <string name="widget_today_description">See today’s saved lessons at a glance.</string>
+    <string name="widget_next_description">See the current or next lesson and its room.</string>
+    <string name="widget_open_to_save">Open Periodify to load lessons</string>
+    <string name="widget_day_complete">Lessons finished for today</string>
+    <string name="widget_no_lessons_today">No lessons today</string>
+    <string name="widget_more_lessons">+%1$d more</string>
+</resources>

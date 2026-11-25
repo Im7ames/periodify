@@ -3,10 +3,131 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:periodify/main.dart';
 import 'package:periodify/model.dart';
+import 'package:periodify/timetable_layout.dart';
 import 'package:periodify/windows_title_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  testWidgets('Today returns to the current date from another week', (
+    tester,
+  ) async {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final nextWeek = DateUtils.addDaysToDate(today, 7);
+    final snapshot = Snapshot(
+      lessons: [
+        Lesson(date: dayKey(today), period: 'P1', order: 0, subject: 'Science'),
+        Lesson(
+          date: dayKey(nextWeek),
+          period: 'P1',
+          order: 0,
+          subject: 'Music',
+        ),
+      ],
+      week: dayKey(weekStart(today)),
+      scrapedAt: today,
+    );
+    SharedPreferences.setMockInitialValues({'snapshot': snapshot.encode()});
+    tester.view.physicalSize = const Size(390, 1050);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(const PeriodifyApp());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Science'), findsOneWidget);
+    await tester.tap(find.byTooltip('Next week'));
+    await tester.pumpAndSettle();
+    expect(find.text('Science'), findsNothing);
+    await tester.tap(find.text('Today'));
+    await tester.pumpAndSettle();
+    expect(find.text('Science'), findsOneWidget);
+    expect(find.text('Music'), findsNothing);
+  });
+
+  testWidgets('layout choice is saved and restored', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(const PeriodifyApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Appearance'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Focus'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Focus'));
+    await tester.pumpAndSettle();
+
+    final preferences = await SharedPreferences.getInstance();
+    expect(preferences.getString('timetableLayout'), 'focus');
+    expect(
+      tester
+          .widget<TimetableLayoutPicker>(find.byType(TimetableLayoutPicker))
+          .selected,
+      TimetableLayout.focus,
+    );
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(const PeriodifyApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Appearance'));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TimetableLayoutPicker>(find.byType(TimetableLayoutPicker))
+          .selected,
+      TimetableLayout.focus,
+    );
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  for (final width in [320.0, 1040.0]) {
+    testWidgets('each lesson layout fits at $width pixels', (tester) async {
+      tester.view.physicalSize = Size(width, 850);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final day = DateUtils.dateOnly(DateTime.now());
+      final lessons = [
+        Lesson(
+          date: dayKey(day),
+          period: 'P1',
+          order: 0,
+          subject: 'Computer science',
+        ),
+        Lesson(
+          date: dayKey(day),
+          period: 'P2',
+          order: 1,
+          subject: 'Music theory',
+        ),
+      ];
+      for (final layout in TimetableLayout.values) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  TimetableLessons(
+                    layout: layout,
+                    lessons: lessons,
+                    date: day,
+                    periodFor: (_) => null,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Computer science'), findsOneWidget);
+        expect(find.text('Music theory'), findsOneWidget);
+        expect(tester.takeException(), isNull, reason: layout.label);
+      }
+    });
+  }
+
   for (final width in [320.0, 390.0, 1280.0]) {
     testWidgets('empty state and navigation fit at $width pixels', (
       tester,

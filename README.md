@@ -12,6 +12,10 @@ An independent Bromcom timetable companion. Flutter powers Android, Windows, mac
 
 Nothing scrapes on startup, a timer, page navigation, or from the watch. Visiting the portal loads its own pages; extracting and saving data requires the Scrape button.
 
+Press **Today** to jump back to the current date. Open **Settings → Appearance** to preview and choose a timetable layout for this device.
+
+On Android, open your launcher's widget picker and look under **Periodify** for **Today’s timetable** and **Next lesson**. Long-press an added widget to resize it. Tap it to open today's timetable in the app. Widgets show saved lessons, including period times you’ve configured, directly on your home screen.
+
 Web and Linux support local JSON snapshot import/export. Browser same-origin restrictions prevent a hosted web app from reading Bromcom's login session. There is no server-side password or cookie proxy.
 
 The information and downloads page ships at `/landing/` alongside the Flutter web app.
