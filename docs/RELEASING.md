@@ -27,7 +27,7 @@ To enable trusted desktop signing for future releases, configure both platforms'
 1. Increment `version: x.y.z+N`; `N` must monotonically increase for Android updates. Update the changelog.
 2. Run `flutter analyze`, `flutter test`, and builds affected by the change.
 3. Commit and push. **Build Periodify** runs on pushes and pull requests. It builds and tests the web app, builds debug Android and Wear OS APKs, and compiles on Windows, macOS and Linux.
-4. Publish a GitHub release for the checked commit with tag `vX.Y.Z`. **Publish Periodify release** verifies the tag and version and calls the same build workflow with the signing credentials. Keep existing tags on their original commits.
+4. Publish a stable GitHub release for the checked commit with tag `vX.Y.Z` and set it as the latest release. **Publish Periodify release** verifies the tag and version and calls the same build workflow with the signing credentials. Keep existing tags on their original commits.
 5. The publish job attaches available installers, the web ZIP, the Linux detached signature and public key, and `SHA256SUMS.txt`. It verifies the uploaded bytes, attaches `updates.json`, and updates the download table. When enabled, Cloudflare deploys the verified web ZIP.
 6. Use **Run workflow** on the release workflow with **dry_run** checked to save a `release-preview` artifact without editing a release. To attach packages after adding credentials, select the existing release tag as the ref, enter that same tag as `release_tag`, and turn off **dry_run**. Retry transient failures and use a new patch version for source fixes.
 
