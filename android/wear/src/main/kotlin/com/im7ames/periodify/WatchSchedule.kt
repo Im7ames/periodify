@@ -63,7 +63,18 @@ internal data class WatchLesson(
     val period: String,
     val timeLabel: String,
     val times: ClosedRange<LocalTime>?,
-)
+) {
+    fun statusAt(now: LocalTime): LessonStatus {
+        val range = times ?: return LessonStatus.UNTIMED
+        return when {
+            now < range.start -> LessonStatus.UPCOMING
+            now < range.endInclusive -> LessonStatus.CURRENT
+            else -> LessonStatus.FINISHED
+        }
+    }
+}
+
+internal enum class LessonStatus { UNTIMED, UPCOMING, CURRENT, FINISHED }
 
 internal data class LessonPair(val current: String?, val next: String?) {
     val text: String

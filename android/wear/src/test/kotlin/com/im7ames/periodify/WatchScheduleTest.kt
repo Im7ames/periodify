@@ -6,6 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 
@@ -63,5 +64,14 @@ class WatchScheduleTest {
         assertEquals("CST›PE", LessonPair("C.S.T.", "PE").text)
         assertEquals("ÉCO›HIS", LessonPair("Économie", "History").text)
         assertEquals("—", LessonPair(null, null).text)
+    }
+
+    @Test fun listHighlightsOnlyTheLessonInProgress() {
+        val lessons = schedule.lessonsOn(monday)
+        val maths = lessons.first { it.subject == "Maths" }
+        assertEquals(LessonStatus.UPCOMING, maths.statusAt(LocalTime.of(8, 39)))
+        assertEquals(LessonStatus.CURRENT, maths.statusAt(LocalTime.of(8, 40)))
+        assertEquals(LessonStatus.FINISHED, maths.statusAt(LocalTime.of(9, 20)))
+        assertEquals(LessonStatus.UNTIMED, lessons.first { it.subject == "Art" }.statusAt(LocalTime.NOON))
     }
 }

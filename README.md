@@ -16,7 +16,9 @@ Press **Today** to jump back to the current date. Open **Settings → Appearance
 
 On Android, open your launcher's widget picker and look under **Periodify** for **Today’s timetable** and **Next lesson**. Long-press an added widget to resize it. Tap it to open today's timetable in the app. Widgets show saved lessons, including period times you’ve configured, directly on your home screen.
 
-On Wear OS, edit your watch face and choose **Now and next** from Periodify for a slot that supports short text. With period times set and synced, it shows the current and next lessons as short codes, such as `MAT›ENG`. A dash means there’s no lesson in that position. Tap the complication to open the watch timetable.
+On Wear OS, swipe or turn the crown to scroll through the timetable. Lesson colours and times appear on the left, with rooms on the right.
+
+To add **Now and next**, edit your watch face and choose it from Periodify for a slot that supports short text. With period times set and synced, it shows the current and next lessons as short codes, such as `MAT›ENG`. A dash means there’s no lesson in that position. Tap the complication to open the watch timetable.
 
 Web and Linux support local JSON snapshot import/export. Browser same-origin restrictions prevent a hosted web app from reading Bromcom's login session. There is no server-side password or cookie proxy.
 

@@ -1,3 +1,8 @@
+# Periodify 0.1.13
+
+- Scroll the Wear OS timetable with the crown or rotating bezel as well as by swiping.
+- See today’s lessons in a compact list with muted Bromcom colours, rooms on the right, and the current lesson highlighted.
+
 # Periodify 0.1.12
 
 - Add the Wear OS **Now and next** watch-face complication. It shows the current and following lesson with short subject codes and opens the watch timetable when tapped.

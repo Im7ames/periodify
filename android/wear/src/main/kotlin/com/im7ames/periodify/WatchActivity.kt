@@ -6,13 +6,14 @@ import android.os.Handler
 import android.os.Looper
 import android.content.SharedPreferences
 import android.graphics.Color
-import android.graphics.Typeface
-import android.view.Gravity
-import android.view.View
-import android.widget.*
+import android.view.InputDevice
+import android.view.MotionEvent
+import android.view.ViewConfiguration
+import android.widget.Button
+import android.widget.ScrollView
 import com.google.android.gms.wearable.*
-import java.time.LocalDate
-import java.time.LocalTime
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
 
 class WatchActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListener {
@@ -22,8 +23,33 @@ class WatchActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeList
     private var availableUpdate: WearUpdate? = null
     private var updateMessage: String? = null
     private var installing = false
+    private lateinit var timetable: WatchTimetableView
+    private lateinit var scroll: ScrollView
+    private var rotaryRemainder = 0f
+    private val rotaryScrollFactor by lazy { ViewConfiguration.get(this).scaledVerticalScrollFactor }
+    private var lastContent: TimetableContent? = null
+
+    private data class TimetableContent(
+        val dateLabel: String,
+        val rows: List<Pair<WatchLesson, LessonStatus>>,
+        val savedDate: String?,
+        val message: String?,
+        val updateLabel: String?,
+        val installing: Boolean,
+    )
+
     private val tick = object : Runnable { override fun run() { render(); handler.postDelayed(this, 30000) } }
-    override fun onCreate(state: Bundle?) { super.onCreate(state); render()
+    override fun onCreate(state: Bundle?) {
+        super.onCreate(state)
+        timetable = WatchTimetableView(this)
+        scroll = ScrollView(this).apply {
+            id = R.id.watch_timetable_scroll
+            setBackgroundColor(Color.BLACK)
+            isVerticalScrollBarEnabled = true
+            addView(timetable)
+        }
+        setContentView(scroll)
+        render()
         @Suppress("DEPRECATION")
         val installed = packageManager.getPackageInfo(packageName, 0).versionName.orEmpty()
         updates.execute {
@@ -46,6 +72,21 @@ class WatchActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeList
     override fun onPause() { handler.removeCallbacks(tick); preferences.unregisterOnSharedPreferenceChangeListener(this); super.onPause() }
     override fun onDestroy() { updates.shutdownNow(); super.onDestroy() }
     override fun onSharedPreferenceChanged(p: SharedPreferences?, key: String?) { runOnUiThread { render() } }
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked != MotionEvent.ACTION_SCROLL ||
+            !event.isFromSource(InputDevice.SOURCE_ROTARY_ENCODER)
+        ) {
+            return super.dispatchGenericMotionEvent(event)
+        }
+        val delta = -event.getAxisValue(MotionEvent.AXIS_SCROLL) * rotaryScrollFactor
+        if (delta == 0f) return super.dispatchGenericMotionEvent(event)
+        val pixels = rotaryRemainder + delta
+        val wholePixels = pixels.toInt()
+        rotaryRemainder = pixels - wholePixels
+        if (wholePixels != 0) scroll.scrollBy(0, wholePixels)
+        return true
+    }
 
     private fun install(update: WearUpdate) {
         installing = true
@@ -70,59 +111,49 @@ class WatchActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeList
         }
     }
 
-    private fun lessonAccent(hex: String): Int {
-        val muted = Color.rgb(169, 218, 184)
-        if (!Regex("^#[0-9a-fA-F]{6}$").matches(hex)) return muted
-        val original = Color.parseColor(hex)
-        fun blend(base: Int, channel: Int) = (0.65 * base + 0.35 * channel).toInt()
-        return Color.rgb(blend(169, Color.red(original)), blend(218, Color.green(original)), blend(184, Color.blue(original)))
-    }
-
     private fun render() {
-        val scale = resources.displayMetrics.density
-        val content = LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER_HORIZONTAL; setPadding((28*scale).toInt(),(32*scale).toInt(),(28*scale).toInt(),(32*scale).toInt()) }
-        val scroll = ScrollView(this).apply { setBackgroundColor(Color.BLACK); addView(content) }
-        fun text(value:String,size:Float=16f,accent:Boolean=false, tint: Int = Color.rgb(169,218,184)) { content.addView(TextView(this).apply { text=value; textSize=size; gravity=Gravity.CENTER; setTextColor(if(accent) tint else Color.WHITE); setPadding(0,(7*scale).toInt(),0,(7*scale).toInt()); if(accent) setTypeface(null,Typeface.BOLD) }) }
-        content.addView(ImageView(this).apply {
-            setImageResource(R.drawable.periodify_launch_mark)
-            layoutParams = LinearLayout.LayoutParams((32 * scale).toInt(), (32 * scale).toInt())
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        })
-        text("Periodify",18f,true)
-        availableUpdate?.let { update ->
-            text(updateMessage ?: "Update ${update.version} available", 14f)
-            content.addView(Button(this).apply {
+        val now = LocalDateTime.now()
+        val raw = WatchSnapshot.read(this)
+        val update = availableUpdate
+        val saved = runCatching {
+            val schedule = WatchSchedule(raw)
+            schedule.savedDate to schedule.lessonsOn(now.toLocalDate())
+        }.getOrNull()
+        val rows = saved?.second.orEmpty().map { it to it.statusAt(now.toLocalTime()) }
+        val message = when {
+            raw.isEmpty() -> "Scrape and sync a timetable from Periodify on your phone."
+            saved == null -> "Please sync a new timetable from your phone."
+            rows.isEmpty() -> "No lessons saved for today."
+            else -> null
+        }
+        val content = TimetableContent(
+            now.format(DateTimeFormatter.ofPattern("EEE, d MMM")),
+            rows,
+            saved?.first,
+            message,
+            update?.let { updateMessage ?: "Update ${it.version} available" },
+            installing,
+        )
+        if (content == lastContent) return
+        lastContent = content
+        timetable.removeAllViews()
+        timetable.addHeader(content.dateLabel)
+        content.message?.let(timetable::addMessage)
+        for ((lesson, status) in content.rows) timetable.addLesson(lesson, status)
+        content.savedDate?.let { timetable.addMessage("Saved $it") }
+        if (update != null && content.updateLabel != null) {
+            timetable.addMessage(content.updateLabel)
+            timetable.addView(Button(this).apply {
                 text = "Install update"
-                isEnabled = !installing
+                isEnabled = !content.installing
                 setOnClickListener { install(update) }
             })
         }
-        val raw = WatchSnapshot.read(this)
-        if(raw.isEmpty()) { text("Your day, on your wrist",20f); text("Open Periodify on your phone. Scrape a week, then sync.",14f); setContentView(scroll); return }
-        try {
-            val schedule = WatchSchedule(raw)
-            val today = LocalDate.now()
-            text(today.dayOfWeek.toString().lowercase().replaceFirstChar{it.uppercase()},14f,true)
-            val now = LocalTime.now()
-            var count = 0
-            for (lesson in schedule.lessonsOn(today)) {
-                val times = lesson.times
-                var status = lesson.period
-                if (times != null) {
-                    if (now >= times.endInclusive) continue
-                    status = if (now < times.start) "UPCOMING · ${lesson.period}" else "NOW · ${lesson.period}"
-                }
-                text(status, 12f, true, lessonAccent(lesson.color))
-                text(lesson.subject, 21f)
-                text(lesson.room, 18f, true)
-                if (lesson.timeLabel.isNotEmpty()) text(lesson.timeLabel, 14f)
-                count++
-            }
-            if(count==0)text("No upcoming lessons saved for today.",17f)
-            text("Saved ${schedule.savedDate}",12f)
-            text("Refresh from your phone",12f)
-        } catch(_:Exception) { text("Please sync a new timetable from your phone.",16f) }
-        content.addView(Button(this).apply { text="Clear watch";setOnClickListener{WatchSnapshot.save(this@WatchActivity, "")} })
-        setContentView(scroll)
+        if (raw.isNotEmpty()) {
+            timetable.addView(Button(this).apply {
+                text = "Clear watch"
+                setOnClickListener { WatchSnapshot.save(this@WatchActivity, "") }
+            })
+        }
     }
 }
