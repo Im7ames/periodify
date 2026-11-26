@@ -1,3 +1,7 @@
+# Periodify 0.1.14
+
+- Add a Wear OS **Today’s timetable** tile with muted Bromcom colours, period times, and rooms on the right. Tap **Full timetable** to open the watch app.
+
 # Periodify 0.1.13
 
 - Scroll the Wear OS timetable with the crown or rotating bezel as well as by swiping.

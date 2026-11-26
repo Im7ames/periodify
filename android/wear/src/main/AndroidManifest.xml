@@ -17,6 +17,18 @@
       <intent-filter><action android:name="com.google.android.gms.wearable.DATA_CHANGED" /><data android:scheme="wear" android:host="*" android:path="/periodify/snapshot" /></intent-filter>
     </service>
     <service
+        android:name=".TimetableTileService"
+        android:description="@string/timetable_tile_description"
+        android:exported="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/timetable_tile_name"
+        android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+      <intent-filter>
+        <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+      </intent-filter>
+      <meta-data android:name="androidx.wear.tiles.PREVIEW" android:resource="@drawable/timetable_tile_preview" />
+    </service>
+    <service
         android:name=".LessonComplicationService"
         android:exported="true"
         android:icon="@drawable/ic_lesson_complication"

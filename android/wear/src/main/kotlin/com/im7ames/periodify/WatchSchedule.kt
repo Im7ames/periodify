@@ -2,10 +2,12 @@ package com.im7ames.periodify
 
 import org.json.JSONObject
 import java.time.DayOfWeek
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters.previousOrSame
 import java.util.Locale
@@ -75,6 +77,33 @@ internal data class WatchLesson(
 }
 
 internal enum class LessonStatus { UNTIMED, UPCOMING, CURRENT, FINISHED }
+
+internal fun tileLessonCapacity(screenHeightDp: Int, fontScale: Float): Int =
+    ((screenHeightDp - 96) / (37 * fontScale.coerceAtLeast(1f) + 4)).toInt().coerceIn(1, 4)
+
+internal fun tileLessons(lessons: List<WatchLesson>, now: LocalTime, count: Int): List<Pair<WatchLesson, LessonStatus>> {
+    val rows = lessons.map { it to it.statusAt(now) }
+    val active = rows.indexOfFirst { it.second == LessonStatus.CURRENT }
+    val next = rows.indexOfFirst { it.second == LessonStatus.UPCOMING }
+    val start = when {
+        active >= 0 -> active
+        next >= 0 -> next
+        rows.any { it.second == LessonStatus.UNTIMED } -> 0
+        else -> (rows.size - count).coerceAtLeast(0)
+    }
+    return rows.drop(start).take(count)
+}
+
+internal fun tileRefreshMillis(lessons: List<WatchLesson>?, now: ZonedDateTime): Long {
+    if (lessons == null) return 0
+    val day = now.toLocalDate()
+    val midnight = day.plusDays(1).atStartOfDay(now.zone)
+    val next = lessons.asSequence().mapNotNull { it.times }
+        .flatMap { sequenceOf(it.start, it.endInclusive) }
+        .map { day.atTime(it).atZone(now.zone) }
+        .filter { it.isAfter(now) }.minOrNull() ?: midnight
+    return Duration.between(now, next).toMillis().coerceAtLeast(60_000)
+}
 
 internal data class LessonPair(val current: String?, val next: String?) {
     val text: String

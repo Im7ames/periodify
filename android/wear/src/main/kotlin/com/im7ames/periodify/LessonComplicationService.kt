@@ -1,20 +1,16 @@
 package com.im7ames.periodify
 
 import android.app.PendingIntent
-import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
 import androidx.wear.watchface.complications.data.ComplicationData
 import androidx.wear.watchface.complications.data.ComplicationType
 import androidx.wear.watchface.complications.data.PlainComplicationText
 import androidx.wear.watchface.complications.data.ShortTextComplicationData
-import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUpdateRequester
 import androidx.wear.watchface.complications.datasource.ComplicationDataTimeline
 import androidx.wear.watchface.complications.datasource.ComplicationRequest
 import androidx.wear.watchface.complications.datasource.SuspendingTimelineComplicationDataSourceService
 import androidx.wear.watchface.complications.datasource.TimeInterval
 import androidx.wear.watchface.complications.datasource.TimelineEntry
-import org.json.JSONObject
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -67,22 +63,5 @@ class LessonComplicationService : SuspendingTimelineComplicationDataSourceServic
                 ),
             ).build(),
         ).setTapAction(tap).build()
-    }
-}
-
-internal object WatchSnapshot {
-    const val key = "snapshot"
-
-    fun preferences(context: Context) = context.getSharedPreferences("periodify", Context.MODE_PRIVATE)
-
-    fun read(context: Context): String = preferences(context).getString(key, "").orEmpty()
-
-    fun save(context: Context, raw: String) {
-        if (raw.length > 90000 || read(context) == raw) return
-        if (raw.isNotEmpty() && runCatching { JSONObject(raw).getInt("schema") }.getOrNull() != 1) return
-        preferences(context).edit().putString(key, raw).apply()
-        ComplicationDataSourceUpdateRequester.create(
-            context, ComponentName(context, LessonComplicationService::class.java),
-        ).requestUpdateAll()
     }
 }

@@ -9,6 +9,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.time.ZonedDateTime
 
 class WatchScheduleTest {
     private val monday = LocalDate.parse("2026-10-26")
@@ -23,7 +24,7 @@ class WatchScheduleTest {
           "lessons": [
             {"date": "2026-10-26", "period": "P3", "subject": "English"},
             {"date": "2026-10-26", "period": "P1", "subject": "Maths"},
-            {"date": "2026-10-26", "period": "P2", "subject": "Science"},
+            {"date": "2026-10-26", "period": "P2", "subject": "Science", "room": "Lab 2", "color": "#2F8FCE"},
             {"date": "2026-10-26", "period": "P4", "subject": "Art"},
             {"date": "2026-11-02", "period": "P1", "subject": "History"},
             {"date": "2026-11-10", "period": "P1", "subject": "Music"}
@@ -73,5 +74,32 @@ class WatchScheduleTest {
         assertEquals(LessonStatus.CURRENT, maths.statusAt(LocalTime.of(8, 40)))
         assertEquals(LessonStatus.FINISHED, maths.statusAt(LocalTime.of(9, 20)))
         assertEquals(LessonStatus.UNTIMED, lessons.first { it.subject == "Art" }.statusAt(LocalTime.NOON))
+    }
+
+    @Test fun tileShowsTheCurrentLessonAndFitsRowsToWatchSize() {
+        val lessons = schedule.lessonsOn(monday).sortedBy { it.times?.start ?: LocalTime.MAX }
+        val small = tileLessonCapacity(192, 1f)
+        assertEquals(2, small)
+        assertEquals(1, tileLessonCapacity(192, 1.5f))
+        assertEquals(3, tileLessonCapacity(227, 1f))
+        val rows = tileLessons(lessons, LocalTime.of(9, 40), small)
+        val (science, status) = rows.first()
+        assertEquals(listOf("Science", "English"), rows.map { it.first.subject })
+        assertEquals("Lab 2", science.room)
+        assertEquals("#2F8FCE", science.color)
+        assertEquals("09:35-10:15", science.timeLabel)
+        assertEquals(LessonStatus.CURRENT, status)
+        val afterEnd = tileLessons(lessons.dropLast(1), LocalTime.NOON, small)
+        assertEquals(listOf("Science", "English"), afterEnd.map { it.first.subject })
+        assertTrue(afterEnd.all { it.second == LessonStatus.FINISHED })
+    }
+
+    @Test fun tileRefreshesAtPeriodBoundariesOrMidnight() {
+        val lessons = schedule.lessonsOn(monday)
+        val atNine = ZonedDateTime.parse("2026-10-26T09:00:00Z")
+        assertEquals(1_200_000L, tileRefreshMillis(lessons, atNine))
+        assertEquals(60_000L, tileRefreshMillis(lessons, atNine.plusMinutes(19).plusSeconds(30)))
+        assertEquals(7_200_000L, tileRefreshMillis(lessons, atNine.plusHours(13)))
+        assertEquals(0L, tileRefreshMillis(null, atNine))
     }
 }

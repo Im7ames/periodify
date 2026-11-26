@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="timetable_tile_name">Today’s timetable</string>
+    <string name="timetable_tile_description">See today’s lessons, times and rooms.</string>
+    <string name="timetable_tile_title">Today</string>
+    <string name="timetable_tile_empty">No lessons today</string>
+    <string name="timetable_tile_no_sync">Sync your timetable from your phone</string>
+    <string name="timetable_tile_open">Full timetable</string>
+    <string name="timetable_tile_now">Now</string>
+    <string name="timetable_tile_room">Room %1$s</string>
+</resources>

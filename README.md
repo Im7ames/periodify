@@ -18,6 +18,8 @@ On Android, open your launcher's widget picker and look under **Periodify** for 
 
 On Wear OS, swipe or turn the crown to scroll through the timetable. Lesson colours and times appear on the left, with rooms on the right.
 
+Add **Today’s timetable** from the watch’s tile picker to see the current and upcoming lessons at a glance. The tile shows times and rooms from the saved timetable. Tap **Full timetable** for all lessons.
+
 To add **Now and next**, edit your watch face and choose it from Periodify for a slot that supports short text. With period times set and synced, it shows the current and next lessons as short codes, such as `MAT›ENG`. A dash means there’s no lesson in that position. Tap the complication to open the watch timetable.
 
 Web and Linux support local JSON snapshot import/export. Browser same-origin restrictions prevent a hosted web app from reading Bromcom's login session. There is no server-side password or cookie proxy.

@@ -15,11 +15,6 @@ import androidx.core.graphics.ColorUtils
 import kotlin.math.roundToInt
 
 internal class WatchTimetableView(context: Context) : LinearLayout(context) {
-    private val mint = 0xFFA9DAB8.toInt()
-    private val mutedText = 0xFFBBC6BE.toInt()
-    private val fadedText = 0xFF9AA69D.toInt()
-    private val surface = 0xFF161C19.toInt()
-
     init {
         orientation = VERTICAL
         val inset = dp(if (resources.configuration.isScreenRound) 18 else 12)
@@ -33,7 +28,7 @@ internal class WatchTimetableView(context: Context) : LinearLayout(context) {
                 setImageResource(R.drawable.periodify_launch_mark)
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }, LayoutParams(dp(16), dp(16)).apply { marginEnd = dp(5) })
-            addView(label("Periodify", 12f, mint, bold = true))
+            addView(label("Periodify", 12f, WatchTimetableColors.mint, bold = true))
         }
         addView(brand, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         addView(label(date, 18f, Color.WHITE, bold = true).apply {
@@ -44,7 +39,7 @@ internal class WatchTimetableView(context: Context) : LinearLayout(context) {
     }
 
     fun addMessage(message: String) {
-        addView(label(message, 13f, mutedText).apply {
+        addView(label(message, 13f, WatchTimetableColors.mutedText).apply {
             gravity = Gravity.CENTER
             setPadding(dp(3), dp(5), dp(3), dp(5))
         }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
@@ -53,15 +48,16 @@ internal class WatchTimetableView(context: Context) : LinearLayout(context) {
     fun addLesson(lesson: WatchLesson, status: LessonStatus) {
         val active = status == LessonStatus.CURRENT
         val finished = status == LessonStatus.FINISHED
-        val accent = lessonAccent(lesson.color)
+        val accent = WatchTimetableColors.accent(lesson.color)
+        val mutedText = WatchTimetableColors.mutedText
         val row = LinearLayout(context).apply {
             gravity = Gravity.CENTER_VERTICAL
             minimumHeight = dp(44)
             setPadding(dp(9), dp(6), dp(9), dp(6))
             background = GradientDrawable().apply {
                 cornerRadius = dp(13).toFloat()
-                setColor(ColorUtils.blendARGB(surface, accent, if (active) .21f else .08f))
-                if (active) setStroke(dp(1), ColorUtils.blendARGB(surface, accent, .60f))
+                setColor(WatchTimetableColors.background(accent, active))
+                if (active) setStroke(dp(1), WatchTimetableColors.border(accent))
             }
         }
         val details = LinearLayout(context).apply {
@@ -76,7 +72,7 @@ internal class WatchTimetableView(context: Context) : LinearLayout(context) {
                 lesson.timeLabel.takeIf(String::isNotBlank)?.replace('-', '–'),
             ).joinToString(" · ")
             if (caption.isNotEmpty()) {
-                addView(label(caption, 11f, if (finished) fadedText else accent).apply {
+                addView(label(caption, 11f, if (finished) WatchTimetableColors.fadedText else accent).apply {
                     maxLines = 2
                     ellipsize = TextUtils.TruncateAt.END
                 })
@@ -98,9 +94,6 @@ internal class WatchTimetableView(context: Context) : LinearLayout(context) {
         })
     }
 
-    private fun lessonAccent(hex: String): Int =
-        if (lessonColor.matches(hex)) ColorUtils.blendARGB(mint, Color.parseColor(hex), .35f) else mint
-
     private fun label(value: String, size: Float, tint: Int, bold: Boolean = false) =
         TextView(context).apply {
             text = value
@@ -111,7 +104,20 @@ internal class WatchTimetableView(context: Context) : LinearLayout(context) {
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).roundToInt()
 
-    private companion object {
-        val lessonColor = Regex("#[0-9a-fA-F]{6}")
-    }
+}
+
+internal object WatchTimetableColors {
+    val mint = 0xFFA9DAB8.toInt()
+    val mutedText = 0xFFBBC6BE.toInt()
+    val fadedText = 0xFF9AA69D.toInt()
+    private val surface = 0xFF161C19.toInt()
+    private val lessonColor = Regex("#[0-9a-fA-F]{6}")
+
+    fun accent(hex: String): Int =
+        if (lessonColor.matches(hex)) ColorUtils.blendARGB(mint, Color.parseColor(hex), .35f) else mint
+
+    fun background(accent: Int, active: Boolean) =
+        ColorUtils.blendARGB(surface, accent, if (active) .21f else .08f)
+
+    fun border(accent: Int) = ColorUtils.blendARGB(surface, accent, .60f)
 }
