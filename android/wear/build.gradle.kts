@@ -31,6 +31,9 @@ android {
 dependencies {
     implementation("com.google.android.gms:play-services-wearable:20.0.1")
     implementation("androidx.core:core:1.17.0")
+    implementation("androidx.wear.watchface:watchface-complications-data-source-ktx:1.2.1")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20250517")
 }
 
 kotlin {

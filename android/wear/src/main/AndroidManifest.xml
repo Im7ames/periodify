@@ -16,5 +16,17 @@
     <service android:name=".SnapshotService" android:exported="true">
       <intent-filter><action android:name="com.google.android.gms.wearable.DATA_CHANGED" /><data android:scheme="wear" android:host="*" android:path="/periodify/snapshot" /></intent-filter>
     </service>
+    <service
+        android:name=".LessonComplicationService"
+        android:exported="true"
+        android:icon="@drawable/ic_lesson_complication"
+        android:label="@string/lesson_complication_name"
+        android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+      <intent-filter>
+        <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
+      </intent-filter>
+      <meta-data android:name="android.support.wearable.complications.SUPPORTED_TYPES" android:value="SHORT_TEXT" />
+      <meta-data android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS" android:value="1800" />
+    </service>
   </application>
 </manifest>

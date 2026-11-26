@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="lesson_complication_name">Now and next</string>
+    <string name="lesson_complication_description">Current lesson: %1$s. Next lesson: %2$s.</string>
+    <string name="lesson_complication_none">None</string>
+    <string name="lesson_complication_no_lessons">No timed lessons remaining today</string>
+    <string name="lesson_complication_no_times">Set period times in Periodify on your phone</string>
+    <string name="lesson_complication_no_sync">Sync your timetable from Periodify on your phone</string>
+</resources>

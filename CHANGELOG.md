@@ -1,3 +1,7 @@
+# Periodify 0.1.12
+
+- Add the Wear OS **Now and next** watch-face complication. It shows the current and following lesson with short subject codes and opens the watch timetable when tapped.
+
 # Periodify 0.1.11
 
 - Jump to today's timetable from any displayed week.

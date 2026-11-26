@@ -11,15 +11,12 @@ import android.view.Gravity
 import android.view.View
 import android.widget.*
 import com.google.android.gms.wearable.*
-import org.json.JSONArray
-import org.json.JSONObject
 import java.time.LocalDate
 import java.time.LocalTime
-import java.time.temporal.ChronoUnit
 import java.util.concurrent.Executors
 
 class WatchActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeListener {
-    private val preferences by lazy { getSharedPreferences("periodify", MODE_PRIVATE) }
+    private val preferences by lazy { WatchSnapshot.preferences(this) }
     private val handler = Handler(Looper.getMainLooper())
     private val updates = Executors.newSingleThreadExecutor()
     private var availableUpdate: WearUpdate? = null
@@ -41,7 +38,7 @@ class WatchActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeList
         Wearable.getDataClient(this).dataItems.addOnSuccessListener { items ->
             try { for (item in items) if (item.uri.path == "/periodify/snapshot") {
                 val raw = DataMapItem.fromDataItem(item).dataMap.getString("snapshot") ?: ""
-                if (raw.length <= 90000) preferences.edit().putString("snapshot",raw).apply()
+                WatchSnapshot.save(this, raw)
             }} finally { items.release() }
         }
     }
@@ -49,20 +46,6 @@ class WatchActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeList
     override fun onPause() { handler.removeCallbacks(tick); preferences.unregisterOnSharedPreferenceChangeListener(this); super.onPause() }
     override fun onDestroy() { updates.shutdownNow(); super.onDestroy() }
     override fun onSharedPreferenceChanged(p: SharedPreferences?, key: String?) { runOnUiThread { render() } }
-
-    private fun scheduleDay(today: LocalDate, lessons: JSONArray, rotation: JSONObject?): LocalDate {
-        val start = today.minusDays((today.dayOfWeek.value - 1).toLong())
-        val end = start.plusDays(6)
-        val weeks = rotation?.optInt("weeks") ?: 0
-        if (weeks !in 1..12) return today
-        for (i in 0 until lessons.length()) {
-            val date = LocalDate.parse(lessons.getJSONObject(i).getString("date"))
-            if (!date.isBefore(start) && !date.isAfter(end)) return today
-        }
-        val anchor = LocalDate.parse(rotation!!.getString("start"))
-        val index = Math.floorMod(ChronoUnit.WEEKS.between(anchor, start), weeks.toLong())
-        return anchor.plusWeeks(index).plusDays((today.dayOfWeek.value - 1).toLong())
-    }
 
     private fun install(update: WearUpdate) {
         installing = true
@@ -114,41 +97,32 @@ class WatchActivity : Activity(), SharedPreferences.OnSharedPreferenceChangeList
                 setOnClickListener { install(update) }
             })
         }
-        val raw=preferences.getString("snapshot","") ?: ""
+        val raw = WatchSnapshot.read(this)
         if(raw.isEmpty()) { text("Your day, on your wrist",20f); text("Open Periodify on your phone. Scrape a week, then sync.",14f); setContentView(scroll); return }
         try {
-            val data = JSONObject(raw)
+            val schedule = WatchSchedule(raw)
             val today = LocalDate.now()
-            val lessons = data.getJSONArray("lessons")
-            val bells = data.optJSONObject("bells") ?: JSONObject()
-            val periodNames = data.optJSONObject("periodNames") ?: JSONObject()
-            val sourceDay = scheduleDay(today, lessons, data.optJSONObject("rotation")).toString()
             text(today.dayOfWeek.toString().lowercase().replaceFirstChar{it.uppercase()},14f,true)
             val now = LocalTime.now()
             var count = 0
-            for (i in 0 until lessons.length()) {
-                val lesson = lessons.getJSONObject(i)
-                if (lesson.getString("date") != sourceDay) continue
-                val label = lesson.getString("period")
-                val name = periodNames.optString(label, label)
-                val times = bells.optString(label)
-                var status = name
-                if (times.contains('-')) {
-                    val (start, end) = times.split('-', limit = 2).map { LocalTime.parse(it) }
-                    if (!now.isBefore(end)) continue
-                    status = if (now.isBefore(start)) "UPCOMING · $name" else "NOW · $name"
+            for (lesson in schedule.lessonsOn(today)) {
+                val times = lesson.times
+                var status = lesson.period
+                if (times != null) {
+                    if (now >= times.endInclusive) continue
+                    status = if (now < times.start) "UPCOMING · ${lesson.period}" else "NOW · ${lesson.period}"
                 }
-                text(status, 12f, true, lessonAccent(lesson.optString("color")))
-                text(lesson.getString("subject"), 21f)
-                text(lesson.optString("room"), 18f, true)
-                if (times.isNotEmpty()) text(times, 14f)
+                text(status, 12f, true, lessonAccent(lesson.color))
+                text(lesson.subject, 21f)
+                text(lesson.room, 18f, true)
+                if (lesson.timeLabel.isNotEmpty()) text(lesson.timeLabel, 14f)
                 count++
             }
             if(count==0)text("No upcoming lessons saved for today.",17f)
-            text("Saved ${data.getString("scrapedAt").take(10)}",12f)
+            text("Saved ${schedule.savedDate}",12f)
             text("Refresh from your phone",12f)
         } catch(_:Exception) { text("Please sync a new timetable from your phone.",16f) }
-        content.addView(Button(this).apply { text="Clear watch";setOnClickListener{preferences.edit().remove("snapshot").apply()} })
+        content.addView(Button(this).apply { text="Clear watch";setOnClickListener{WatchSnapshot.save(this@WatchActivity, "")} })
         setContentView(scroll)
     }
 }

@@ -72,7 +72,7 @@ jobs:
         run: |
           flutter build apk --debug
           cd android
-          ./gradlew :wear:assembleDebug
+          ./gradlew :wear:testDebugUnitTest :wear:assembleDebug
       - uses: actions/upload-artifact@v4
         if: inputs.release_version == ''
         with:
@@ -105,7 +105,7 @@ jobs:
         run: |
           flutter build apk --release
           flutter build appbundle --release
-          (cd android && ./gradlew :wear:assembleRelease)
+          (cd android && ./gradlew :wear:testReleaseUnitTest :wear:assembleRelease)
           mkdir -p artifacts
           cp build/app/outputs/flutter-apk/app-release.apk artifacts/periodify-android.apk
           cp build/app/outputs/bundle/release/app-release.aab artifacts/periodify-android.aab
