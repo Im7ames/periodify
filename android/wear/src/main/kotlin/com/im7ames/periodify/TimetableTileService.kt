@@ -23,6 +23,7 @@ import androidx.wear.protolayout.ModifiersBuilders.Corner
 import androidx.wear.protolayout.ModifiersBuilders.Modifiers
 import androidx.wear.protolayout.ModifiersBuilders.Padding
 import androidx.wear.protolayout.TimelineBuilders.Timeline
+import androidx.wear.protolayout.material3.ButtonColors
 import androidx.wear.protolayout.material3.MaterialScope
 import androidx.wear.protolayout.material3.Typography
 import androidx.wear.protolayout.material3.primaryLayout
@@ -75,7 +76,14 @@ class TimetableTileService : Material3TileService(allowDynamicTheme = false) {
                     }
                 },
                 bottomSlot = {
-                    textEdgeButton(onClick = open) {
+                    textEdgeButton(
+                        onClick = open,
+                        modifier = LayoutModifier.contentDescription(getString(R.string.timetable_tile_open_description)),
+                        colors = ButtonColors(
+                            containerColor = LayoutColor(WatchTimetableColors.mint),
+                            labelColor = LayoutColor(0xFF173526.toInt()),
+                        ),
+                    ) {
                         text(getString(R.string.timetable_tile_open).layoutString)
                     }
                 },

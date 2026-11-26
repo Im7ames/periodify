@@ -5,7 +5,8 @@
     <string name="timetable_tile_title">Today</string>
     <string name="timetable_tile_empty">No lessons today</string>
     <string name="timetable_tile_no_sync">Sync your timetable from your phone</string>
-    <string name="timetable_tile_open">Full timetable</string>
+    <string name="timetable_tile_open">Open</string>
+    <string name="timetable_tile_open_description">Open full timetable</string>
     <string name="timetable_tile_now">Now</string>
     <string name="timetable_tile_room">Room %1$s</string>
 </resources>
