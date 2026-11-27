@@ -1,4 +1,7 @@
-# Periodify
+<div align="center">
+  <img src="brand/icons/periodify-light.png" width="100px" height="100px" />
+  <h1>Periodify</h1>
+</div>
 
 An independent Bromcom timetable companion. Flutter powers Android, Windows, macOS, Linux and web; a small native Kotlin app runs on Wear OS.
 
