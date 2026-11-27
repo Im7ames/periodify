@@ -76,22 +76,36 @@ class WatchScheduleTest {
         assertEquals(LessonStatus.UNTIMED, lessons.first { it.subject == "Art" }.statusAt(LocalTime.NOON))
     }
 
-    @Test fun tileShowsTheCurrentLessonAndFitsRowsToWatchSize() {
+    @Test fun tilePagesCoverEveryLessonAndFitRowsToWatchSize() {
         val lessons = schedule.lessonsOn(monday).sortedBy { it.times?.start ?: LocalTime.MAX }
         val small = tileLessonCapacity(192, 1f)
         assertEquals(2, small)
         assertEquals(1, tileLessonCapacity(192, 1.5f))
         assertEquals(3, tileLessonCapacity(227, 1f))
-        val rows = tileLessons(lessons, LocalTime.of(9, 40), small)
-        val (science, status) = rows.first()
-        assertEquals(listOf("Science", "English"), rows.map { it.first.subject })
+        val duringScience = tileLessonPage(lessons, LocalTime.of(9, 40), small, null)
+        val (science, status) = duringScience.rows.last()
+        assertEquals(listOf("Maths", "Science"), duringScience.rows.map { it.first.subject })
         assertEquals("Lab 2", science.room)
         assertEquals("#2F8FCE", science.color)
         assertEquals("09:35-10:15", science.timeLabel)
         assertEquals(LessonStatus.CURRENT, status)
-        val afterEnd = tileLessons(lessons.dropLast(1), LocalTime.NOON, small)
-        assertEquals(listOf("Science", "English"), afterEnd.map { it.first.subject })
-        assertTrue(afterEnd.all { it.second == LessonStatus.FINISHED })
+        val last = tileLessonPage(lessons, LocalTime.of(10, 30), small, null)
+        assertEquals(1, last.index)
+        assertEquals(2, last.pageCount)
+        assertEquals(lessons, (duringScience.rows + last.rows).map { it.first })
+        assertEquals(LessonStatus.UNTIMED, last.rows.last().second)
+    }
+
+    @Test fun tileSelectionSurvivesRefreshAndClampsAfterScheduleChanges() {
+        val lessons = schedule.lessonsOn(monday).sortedBy { it.times?.start ?: LocalTime.MAX }
+        val late = LocalTime.NOON
+        val requestedFirst = tileLessonPage(lessons.take(3), late, 2, 0)
+        assertEquals(0, requestedFirst.index)
+        assertTrue(requestedFirst.rows.all { it.second == LessonStatus.FINISHED })
+        assertEquals(1, tileLessonPage(lessons.take(3), late, 2, null).index)
+        assertEquals(0, tileLessonPage(lessons.take(1), late, 2, 1).index)
+        assertEquals(0, tileLessonPage(lessons, late, 2, -1).index)
+        assertTrue(tileLessonPage(emptyList(), late, 2, 1).rows.isEmpty())
     }
 
     @Test fun tileRefreshesAtPeriodBoundariesOrMidnight() {

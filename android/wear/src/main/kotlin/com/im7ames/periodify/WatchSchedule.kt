@@ -81,17 +81,31 @@ internal enum class LessonStatus { UNTIMED, UPCOMING, CURRENT, FINISHED }
 internal fun tileLessonCapacity(screenHeightDp: Int, fontScale: Float): Int =
     ((screenHeightDp - 96) / (37 * fontScale.coerceAtLeast(1f) + 4)).toInt().coerceIn(1, 4)
 
-internal fun tileLessons(lessons: List<WatchLesson>, now: LocalTime, count: Int): List<Pair<WatchLesson, LessonStatus>> {
+internal data class TileLessonPage(
+    val index: Int,
+    val pageCount: Int,
+    val rows: List<Pair<WatchLesson, LessonStatus>>,
+)
+
+internal fun tileLessonPage(
+    lessons: List<WatchLesson>,
+    now: LocalTime,
+    capacity: Int,
+    requestedPage: Int?,
+): TileLessonPage {
     val rows = lessons.map { it to it.statusAt(now) }
-    val active = rows.indexOfFirst { it.second == LessonStatus.CURRENT }
-    val next = rows.indexOfFirst { it.second == LessonStatus.UPCOMING }
-    val start = when {
-        active >= 0 -> active
-        next >= 0 -> next
+    if (rows.isEmpty()) return TileLessonPage(0, 1, emptyList())
+    val pages = rows.chunked(capacity)
+    val current = rows.indexOfFirst { it.second == LessonStatus.CURRENT }
+    val upcoming = rows.indexOfFirst { it.second == LessonStatus.UPCOMING }
+    val suggested = when {
+        current >= 0 -> current / capacity
+        upcoming >= 0 -> upcoming / capacity
         rows.any { it.second == LessonStatus.UNTIMED } -> 0
-        else -> (rows.size - count).coerceAtLeast(0)
+        else -> pages.lastIndex
     }
-    return rows.drop(start).take(count)
+    val index = requestedPage?.coerceIn(0, pages.lastIndex) ?: suggested
+    return TileLessonPage(index, pages.size, pages[index])
 }
 
 internal fun tileRefreshMillis(lessons: List<WatchLesson>?, now: ZonedDateTime): Long {

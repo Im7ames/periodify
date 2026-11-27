@@ -1,3 +1,7 @@
+# Periodify 0.1.16
+
+- Browse every lesson in today’s Wear OS timetable tile with previous and next controls. Each page keeps lesson times, room names, and Bromcom colours.
+
 # Periodify 0.1.15
 
 - Keep the timetable tile’s **Open** button readable on small round watch screens and match the watch app’s colours.

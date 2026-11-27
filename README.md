@@ -21,7 +21,7 @@ On Android, open your launcher's widget picker and look under **Periodify** for 
 
 On Wear OS, swipe or turn the crown to scroll through the timetable. Lesson colours and times appear on the left, with rooms on the right.
 
-Add **Today’s timetable** from the watch’s tile picker to see the current and upcoming lessons at a glance. The tile shows times and rooms from the saved timetable. Tap **Open** for all lessons.
+Add **Today’s timetable** from the watch’s tile picker. Use its arrows to browse all of today’s lessons, times, and rooms. Tap the page heading or **Open** to open the watch app.
 
 To add **Now and next**, edit your watch face and choose it from Periodify for a slot that supports short text. With period times set and synced, it shows the current and next lessons as short codes, such as `MAT›ENG`. A dash means there’s no lesson in that position. Tap the complication to open the watch timetable.
 
